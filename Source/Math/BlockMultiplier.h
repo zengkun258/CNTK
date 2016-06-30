@@ -20,6 +20,7 @@
 #include <vector>
 #include "BlockMultiplierMatrixUtil.h"
 #include "BlockHandlerSSE.h"
+#define SUPPORT_AVX2
 #ifdef SUPPORT_AVX2
 #include "BlockHandlerAVX.h"
 #endif

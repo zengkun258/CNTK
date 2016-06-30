@@ -130,6 +130,7 @@
     <ClInclude Include="Quantizers.h" />
     <ClInclude Include="BlockMultiplierMatrixUtil.h" />
     <ClInclude Include="DataTransferer.h" />
+    <ClInclude Include="BlockMultiplierMatrixUtil.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="GPUMatrix.h">
