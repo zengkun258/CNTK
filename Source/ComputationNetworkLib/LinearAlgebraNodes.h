@@ -8,8 +8,6 @@
 #include "ComputationNode.h"
 #include "Matrix.h"
 #include "TensorView.h"
-#include "BlockMultiplier.h"
-
 #include <unordered_set>
 #include <map>
 #include <string>
@@ -625,7 +623,7 @@ public:
     {
         if (m_preparedA != nullptr)
         {
-             BlockMultiplier<BlockHandlerSSE>::FreeMatrix(m_preparedA); // Template arg doesn't matter.
+             TensorView<ElemType>::FreeQuantizedMatrix(m_preparedA); 
         }
     }
 };
