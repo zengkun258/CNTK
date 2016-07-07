@@ -177,7 +177,6 @@
     <ClInclude Include="RNGHandle.h" />
     <ClInclude Include="RNNCommon.h" />
     <ClInclude Include="MatrixQuantizerImpl.h" />
-    <ClInclude Include="RNGHandle.h" />
     <ClInclude Include="TensorOps.h" />
     <ClInclude Include="TensorView.h" />
     <ClInclude Include="Quantizers.h" />
