@@ -529,6 +529,33 @@ void NDLNodeEvaluatorImpl<ElemType>::Evaluate(NDLNode<ElemType>* node, const wst
             nodePtr = builder.BatchNormalization(nullptr, nullptr, nullptr, nullptr, nullptr, spatial, normTimeConst, blendTimeConst, epsilon, useCntkEngine, imageLayoutKind, name);
         }
     }
+    else if (cnNodeType == OperationNameOf(CropNode))
+    {
+        // We expect 4 parameters: 2 inputs and 2 offsets
+        if (parameter.size() != 4)
+        {
+            RuntimeError("%ls should have 4 fixed parameters[input1, input2, offsetX, offsetY].", cnNodeType.c_str());
+        }
+
+        // After we are done with processing parameters here we still need to process two inputs (just offsets are
+        // handled here).
+        nodeParamStart = 0;
+        nodeParamCount = 2;
+
+        if (pass == ndlPassInitial)
+        {
+            // We skip input nodes and just evaluate offsets here.
+            int id = 2;
+            vector<void*> params = EvaluateParameters(node, baseName, id, parameter.size() - id, pass);
+
+            // Take offsets from evaluated parameters.
+            int offsetX = ((NDLNode<ElemType>*) params[0])->GetScalar();
+            int offsetY = ((NDLNode<ElemType>*) params[1])->GetScalar();
+
+            // Create crop node without inputs (will be attached later).
+            nodePtr = builder.Crop(nullptr, nullptr, offsetX, offsetY, name);
+        }
+    }
     else
     {
 
