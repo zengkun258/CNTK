@@ -325,6 +325,7 @@ BOOST_AUTO_TEST_CASE(ConvolutionBackwardKernel)
         for (const auto& g : GenerateConvTestConfigs())
         {
             auto baseEng = ConvEng::Create(g, baseDeviceId, ImageLayoutKind::CHW, 0, PoolKind::None, ConvolutionEngineKind::CuDnn);
+            baseEng->MakeDeterministic();
             auto testEng = ConvEng::Create(g, deviceId, ImageLayoutKind::CHW, maxTempMem, PoolKind::None, engKind);
 
             size_t n = batchSizeG(rng);
