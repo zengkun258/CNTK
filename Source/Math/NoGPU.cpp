@@ -2240,7 +2240,7 @@ void* GPUMatrix<ElemType>::s_curandGenerator = NULL;
 
 template <class ElemType>
 std::unique_ptr<ConvolutionEngine<ElemType>> CuDnnConvolutionEngineFactory<ElemType>::Create(ConvolveGeometryPtr, DEVICEID_TYPE,
-                                                                                             ImageLayoutKind, size_t, PoolKind)
+                                                                                             ImageLayoutKind, size_t, PoolKind, bool)
 {
     RuntimeError("The code is compiled with CPUONLY macro.");
 }
