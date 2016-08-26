@@ -3,6 +3,7 @@
 #include <memory>
 #include "../../../Source/ComputationNetworkLib/ReshapingNodes.h"
 
+using namespace Microsoft::MSR::CNTK;
 using namespace std;
 
 namespace Microsoft { namespace MSR { namespace CNTK { namespace Test {
@@ -22,11 +23,11 @@ public:
     {
         // Set given shape and allocate matrices.
         TensorShape shape(shapeVec);
-        SetDims(shape, false);
-        CreateValueMatrixIfNull();
-        Value().Resize(1, shape.GetNumElements());
-        CreateGradientMatrixIfNull();
-        Gradient().Resize(1, shape.GetNumElements());
+        this->SetDims(shape, false);
+        this->CreateValueMatrixIfNull();
+        this->Value().Resize(1, shape.GetNumElements());
+        this->CreateGradientMatrixIfNull();
+        this->Gradient().Resize(1, shape.GetNumElements());
     }
     DummyNodeTest(DEVICEID_TYPE deviceId, const wstring& name) : Base(deviceId, name) {}
 
@@ -34,7 +35,7 @@ public:
 
     virtual void /*ComputationNode::*/ BackpropTo(const size_t /*inputIndex*/, const FrameRange& /*fr*/) override {}
 
-    Matrix<ElemType>& GetGradient() { return Gradient(); }
+    Matrix<ElemType>& GetGradient() { return this->Gradient(); }
 };
 
 // Extends crop node to provide acces to protected members.
@@ -44,19 +45,19 @@ class CropNodeTest : public CropNode<ElemType>
 public:
     CropNodeTest() : CropNode<ElemType>(0, L"CropNodeTest"){}
 
-    int OffsetX() { return m_xOffset; }
-    int OffsetY() { return m_yOffset; }
-    SmallVector<size_t> GetOutputDims() { return GetSampleLayout().GetDims(); }
+    int OffsetX() { return this->m_xOffset; }
+    int OffsetY() { return this->m_yOffset; }
+    SmallVector<size_t> GetOutputDims() { return this->GetSampleLayout().GetDims(); }
     void AllocMatrices()
     {
-        CreateValueMatrixIfNull();
-        CreateGradientMatrixIfNull();
-        Value().Resize(1, GetSampleLayout().GetNumElements());
-        Gradient().Resize(1, GetSampleLayout().GetNumElements());
+        this->CreateValueMatrixIfNull();
+        this->CreateGradientMatrixIfNull();
+        this->Value().Resize(1, this->GetSampleLayout().GetNumElements());
+        this->Gradient().Resize(1, this->GetSampleLayout().GetNumElements());
     }
     Matrix<ElemType>& GetGradient()
     {
-        return Gradient();
+        return this->Gradient();
     }
 };
 
@@ -64,77 +65,75 @@ template<class ElemType>
 void CropNodeConstructTestImpl()
 {
     // Test that offsets cannot be negative.
-    bool exceptionThrown = false;
-    try
-    {
-        shared_ptr<CropNode<ElemType>> cropNode(new CropNode<ElemType>(-1, 1, c_deviceId, L"CropNode"));
-    }
-    catch (...)
-    {
-        exceptionThrown = true;
-    }
-    BOOST_REQUIRE_MESSAGE(exceptionThrown, "Negative offset accepted in crop node");
-    exceptionThrown = false;
-    try
-    {
-        shared_ptr<CropNode<ElemType>> cropNode(new CropNode<ElemType>(1, -1, c_deviceId, L"CropNode"));
-    }
-    catch (...)
-    {
-        exceptionThrown = true;
-    }
-    BOOST_REQUIRE_MESSAGE(exceptionThrown, "Negative offset accepted in crop node");
-    exceptionThrown = false;
-    try
-    {
-        shared_ptr<CropNode<ElemType>> cropNode(new CropNode<ElemType>(-1, -1, c_deviceId, L"CropNode"));
-    }
-    catch (...)
-    {
-        exceptionThrown = true;
-    }
-    BOOST_REQUIRE_MESSAGE(exceptionThrown, "Negative offset accepted in crop node");
+    BOOST_REQUIRE_EXCEPTION(
+        make_shared<CropNode<ElemType>>(1, -1, c_deviceId, L"CropNode"),
+        std::runtime_error,
+        [](std::runtime_error const& ex) { return string("Offsets in crop node must be non-negative") == ex.what(); }
+    );
+    BOOST_REQUIRE_EXCEPTION(
+        make_shared<CropNode<ElemType>>(-1, 1, c_deviceId, L"CropNode"),
+        std::runtime_error,
+        [](std::runtime_error const& ex) { return string("Offsets in crop node must be non-negative") == ex.what(); }
+    );
+    BOOST_REQUIRE_EXCEPTION(
+        make_shared<CropNode<ElemType>>(-1, -1, c_deviceId, L"CropNode"),
+        std::runtime_error,
+        [](std::runtime_error const& ex) { return string("Offsets in crop node must be non-negative") == ex.what(); }
+    );
 }
 
 template<class ElemType>
 void CropNodeValidateTestImpl()
 {
     {
-        // Test that validation fails if cropping cannot be done.
-        shared_ptr<CropNode<ElemType>> cropNode(new CropNode<ElemType>(6, 6, c_deviceId, L"CropNode"));
-        shared_ptr<CropNodeTest<ElemType>> cropNodeTest(new CropNodeTest<ElemType>());
+        // Test that validation fails if cropping cannot be done in x direction.
+        auto cropNode = make_shared<CropNode<ElemType>>(6, 3, c_deviceId, L"CropNode");
+        auto cropNodeTest = make_shared<CropNodeTest<ElemType>>();
         cropNode->CopyTo(cropNodeTest, cropNodeTest->GetName(), CopyNodeFlags::copyNodeValue);
 
-        // 6 + 5 > 10 (offset + crop > input) -> cropping not possible.
-        SmallVector<size_t> firstInputDims = { 10, 10};
+        // 6 + 5 > 10 (offset + crop > input) -> cropping not possible in x direction.
+        SmallVector<size_t> firstInputDims = { 10, 10 };
         SmallVector<size_t> secondInputDims = { 5, 5 };
-        shared_ptr<DummyNodeTest<ElemType>> firstInput(new DummyNodeTest<ElemType>(firstInputDims));
-        shared_ptr<DummyNodeTest<ElemType>> secondInput(new DummyNodeTest<ElemType>(secondInputDims));
+        auto firstInput = make_shared<DummyNodeTest<ElemType>>(firstInputDims);
+        auto secondInput = make_shared<DummyNodeTest<ElemType>>(secondInputDims);
         vector<ComputationNodeBasePtr> inputs = { firstInput, secondInput };
         cropNodeTest->AttachInputs(inputs);
-        bool exceptionThrown = false;
-        try
-        {
-            cropNodeTest->Validate(true);
-        }
-        catch (...)
-        {
-            exceptionThrown = true;
-        }
+        BOOST_REQUIRE_EXCEPTION(
+            cropNodeTest->Validate(true),
+            std::runtime_error,
+            [](std::runtime_error const& ex) { return string("Input is small to be cropped along x dimension in crop node.") == ex.what(); }
+        );
+    }
+    {
+        // Test that validation fails if cropping cannot be done in y direction.
+        auto cropNode = make_shared<CropNode<ElemType>>(3, 7, c_deviceId, L"CropNode");
+        auto cropNodeTest = make_shared<CropNodeTest<ElemType>>();
+        cropNode->CopyTo(cropNodeTest, cropNodeTest->GetName(), CopyNodeFlags::copyNodeValue);
 
-        BOOST_REQUIRE_MESSAGE(exceptionThrown, "Crop validation succeeded in spite of invalid offsets.");
+        // 7 + 5 > 10 (offset + crop > input) -> cropping not possible in y direction.
+        SmallVector<size_t> firstInputDims = { 10, 10 };
+        SmallVector<size_t> secondInputDims = { 5, 5 };
+        auto firstInput = make_shared<DummyNodeTest<ElemType>>(firstInputDims);
+        auto secondInput = make_shared<DummyNodeTest<ElemType>>(secondInputDims);
+        vector<ComputationNodeBasePtr> inputs = { firstInput, secondInput };
+        cropNodeTest->AttachInputs(inputs);
+        BOOST_REQUIRE_EXCEPTION(
+            cropNodeTest->Validate(true),
+            std::runtime_error,
+            [](std::runtime_error const& ex) { return string("Input is small to be cropped along y dimension in crop node.") == ex.what(); }
+        );
     }
 
     {
         // Test that crop node output is same size as second input after validation.
-        shared_ptr<CropNode<ElemType>> cropNode(new CropNode<ElemType>(3, 3, c_deviceId, L"CropNode"));
-        shared_ptr<CropNodeTest<ElemType>> cropNodeTest(new CropNodeTest<ElemType>());
+        auto cropNode = make_shared<CropNode<ElemType>>(3, 3, c_deviceId, L"CropNode");
+        auto cropNodeTest = make_shared<CropNodeTest<ElemType>>();
         cropNode->CopyTo(cropNodeTest, cropNodeTest->GetName(), CopyNodeFlags::copyNodeValue);
 
         SmallVector<size_t> firstInputDims = { 10, 10 };
         SmallVector<size_t> secondInputDims = { 5, 5 };
-        shared_ptr<DummyNodeTest<ElemType>> firstInput(new DummyNodeTest<ElemType>(firstInputDims));
-        shared_ptr<DummyNodeTest<ElemType>> secondInput(new DummyNodeTest<ElemType>(secondInputDims));
+        auto firstInput = make_shared<DummyNodeTest<ElemType>>(firstInputDims);
+        auto secondInput = make_shared<DummyNodeTest<ElemType>>(secondInputDims);
         vector<ComputationNodeBasePtr> inputs = { firstInput, secondInput };
         cropNodeTest->AttachInputs(inputs);
         cropNodeTest->Validate(true);
@@ -148,14 +147,14 @@ template<class ElemType>
 void CropNodeForwardTestImpl()
 {
     // Test that input is correctly cropped.
-    shared_ptr<CropNode<ElemType>> cropNode(new CropNode<ElemType>(1, 1, c_deviceId, L"CropNode"));
-    shared_ptr<CropNodeTest<ElemType>> cropNodeTest(new CropNodeTest<ElemType>());
+    auto cropNode = make_shared<CropNode<ElemType>>(1, 1, c_deviceId, L"CropNode");
+    auto cropNodeTest = make_shared<CropNodeTest<ElemType>>();
     cropNode->CopyTo(cropNodeTest, cropNodeTest->GetName(), CopyNodeFlags::copyNodeValue);
 
     SmallVector<size_t> firstInputDims = { 4, 4 };
     SmallVector<size_t> secondInputDims = { 2, 2 };
-    shared_ptr<DummyNodeTest<ElemType>> firstInput(new DummyNodeTest<ElemType>(firstInputDims));
-    shared_ptr<DummyNodeTest<ElemType>> secondInput(new DummyNodeTest<ElemType>(secondInputDims));
+    auto firstInput = make_shared<DummyNodeTest<ElemType>>(firstInputDims);
+    auto secondInput = make_shared<DummyNodeTest<ElemType>>(secondInputDims);
 
     Matrix<ElemType>& input = firstInput->Value();
     ElemType inputVals[16] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
@@ -179,14 +178,14 @@ template<class ElemType>
 void CropNodeBackwardTestImpl()
 {
     // Test that gradients are correctly propagated.
-    shared_ptr<CropNode<ElemType>> cropNode(new CropNode<ElemType>(1, 1, c_deviceId, L"CropNode"));
-    shared_ptr<CropNodeTest<ElemType>> cropNodeTest(new CropNodeTest<ElemType>());
+    auto cropNode = make_shared<CropNode<ElemType>>(1, 1, c_deviceId, L"CropNode");
+    auto cropNodeTest = make_shared<CropNodeTest<ElemType>>();
     cropNode->CopyTo(cropNodeTest, cropNodeTest->GetName(), CopyNodeFlags::copyNodeValue);
 
     SmallVector<size_t> firstInputDims = { 4, 4 };
     SmallVector<size_t> secondInputDims = { 2, 2 };
-    shared_ptr<DummyNodeTest<ElemType>> firstInput(new DummyNodeTest<ElemType>(firstInputDims));
-    shared_ptr<DummyNodeTest<ElemType>> secondInput(new DummyNodeTest<ElemType>(secondInputDims));
+    auto firstInput = make_shared<DummyNodeTest<ElemType>>(firstInputDims);
+    auto secondInput = make_shared<DummyNodeTest<ElemType>>(secondInputDims);
 
     vector<ComputationNodeBasePtr> inputs = { firstInput, secondInput };
     cropNodeTest->AttachInputs(inputs);
@@ -237,7 +236,7 @@ BOOST_AUTO_TEST_CASE(CropNodeInitTest)
 
 BOOST_AUTO_TEST_CASE(CropNodeValidateTest)
 {
-    CropNodeValidateTestImpl<double>();
+    CropNodeValidateTestImpl<float>();
     CropNodeValidateTestImpl<double>();
 }
 
