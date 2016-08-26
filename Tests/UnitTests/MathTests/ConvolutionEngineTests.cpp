@@ -306,9 +306,7 @@ BOOST_AUTO_TEST_CASE(ConvolutionBackwardKernel)
     std::mt19937 rng(0);
     boost::random::uniform_int_distribution<> batchSizeG(1, 8);
     boost::random::normal_distribution<float> nd;
-
-    Globals::ForceDeterministicAlgorithms();
-
+    
     auto initMat = [&](SingleMatrix& buf, size_t r, size_t c, vec& data) -> SingleMatrix
     {
         data.resize(r * 3 * c);
@@ -327,8 +325,8 @@ BOOST_AUTO_TEST_CASE(ConvolutionBackwardKernel)
         auto maxTempMem = std::get<2>(engCfg);
         for (const auto& g : GenerateConvTestConfigs())
         {
-            auto baseEng = ConvEng::Create(g, baseDeviceId, ImageLayoutKind::CHW, 0, PoolKind::None, ConvolutionEngineKind::CuDnn);            
-            auto testEng = ConvEng::Create(g, deviceId, ImageLayoutKind::CHW, maxTempMem, PoolKind::None, engKind);
+            auto baseEng = ConvEng::Create(g, baseDeviceId, ImageLayoutKind::CHW, 0, PoolKind::None, ConvolutionEngineKind::CuDnn, L"", true);
+            auto testEng = ConvEng::Create(g, deviceId, ImageLayoutKind::CHW, maxTempMem, PoolKind::None, engKind, L"", true);
 
             size_t n = batchSizeG(rng);
             vec buf;
