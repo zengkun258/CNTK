@@ -423,11 +423,11 @@ class CropNode : public ComputationNode<ElemType>, public NumInputs<2>
     static const std::wstring TypeName() { return L"Crop"; }
 
 public:
-    CropNode(DEVICEID_TYPE deviceId, const wstring& name)
-        : Base(deviceId, name), m_xOffset(numeric_limits<int>::max()), m_yOffset(numeric_limits<int>::max())
+    CropNode(DEVICEID_TYPE deviceId, const std::wstring& name)
+        : CropNode(std::numeric_limits<int>::max(), std::numeric_limits<int>::max(), deviceId, name)
     {}
 
-    CropNode(const int offsetX, const int offsetY, DEVICEID_TYPE deviceId, const wstring& name)
+    CropNode(const int offsetX, const int offsetY, DEVICEID_TYPE deviceId, const std::wstring& name)
         : Base(deviceId, name), m_xOffset(offsetX), m_yOffset(offsetY)
     {
         if (m_xOffset < 0 || m_yOffset < 0)
@@ -445,7 +445,7 @@ public:
         // We always need to have two inputs.
         if (m_inputs.size() != 2)
         {
-            RuntimeError("Crop node must have 2 inputs.");
+            RuntimeError("Crop node must have 2 inputs, %d is provided.", static_cast<int>(m_inputs.size()));
         }
 
         Base::Validate(isFinalValidationPass);
@@ -531,7 +531,10 @@ public:
         if (flags & CopyNodeFlags::copyNodeValue)
         {
             auto node = dynamic_pointer_cast<CropNode<ElemType>>(nodeP);
-
+            if (node == nullptr)
+            {
+                RuntimeError("Copying crop node to non-crop node.");
+            }
             node->m_xOffset = m_xOffset;
             node->m_yOffset = m_yOffset;
         }
