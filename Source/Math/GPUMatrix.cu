@@ -1544,7 +1544,7 @@ void GPUMatrix<ElemType>::CachedResize(const size_t numRows, const size_t numCol
 
 	if (GetNumRows() && GetNumCols()) {
 		// Indeed, if using PhysicalReleaseBuffer, the buffer pool will be disabled
-		BufferManager::GetManagerInstance()->LogicalReleaseBuffer<ElemType>(GetComputeDeviceId(), Buffer(), GetSizeAllocated());
+		BufferManager::GetManagerInstance(GetComputeDeviceId())->LogicalReleaseBuffer<ElemType>(Buffer(), GetSizeAllocated());
 	}
 
 	m_numRows = numRows;
@@ -1560,7 +1560,7 @@ void GPUMatrix<ElemType>::CachedResize(const size_t numRows, const size_t numCol
 	else
 	{
 		SetSizeAllocated(numElements);
-		SetBuffer(BufferManager::GetManagerInstance()->RequestBuffer<ElemType>(GetComputeDeviceId(), GetSizeAllocated()),
+		SetBuffer(BufferManager::GetManagerInstance(GetComputeDeviceId())->RequestBuffer<ElemType>(GetSizeAllocated()),
 			numElements * sizeof(ElemType));
 	}
 	m_sliceViewOffset = 0;

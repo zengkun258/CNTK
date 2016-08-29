@@ -18,6 +18,7 @@
 #include <stdint.h>
 #include <memory>
 #include <unordered_map>
+#include <map>
 
 #pragma warning( disable: 4251 )
 typedef unsigned char byte;
@@ -38,6 +39,8 @@ typedef unsigned char byte;
 
 #define GPUSPARSE_INDEX_TYPE int // cuSparse only supports int array indexes
 #define CPUSPARSE_INDEX_TYPE int // to be consistent with cuSparse but limited the possible size of the matrix.
+
+#define MEM_MAX_LIMIT_TIMES 5
 
 namespace Microsoft { namespace MSR { namespace CNTK {
 
@@ -211,7 +214,13 @@ class BufferManager
 {
 private:
 	BufferManager() = default;
-	~BufferManager() { delete m_instance; }
+	~BufferManager() {
+		for (auto &iter : m_instances) {
+			delete iter.second;
+			iter.second = nullptr;
+		}
+		m_instances.clear();
+	}
 	
 	// Disable all the copy & move functions to keep the instance safely
 	BufferManager(const BufferManager&) = delete;
@@ -220,37 +229,38 @@ private:
 	BufferManager& operator= (BufferManager &&) = delete;
 
 public:
-	static BufferManager* GetManagerInstance()
+	static BufferManager* GetManagerInstance(DEVICEID_TYPE deviceId)
 	{
+		auto instance = m_instances.find(deviceId);
 		// BUGBUG: don't consider thread safe here, should we?
-		if (!m_instance) m_instance = new BufferManager();
-		return m_instance;
+		if (instance == m_instances.end()) { 
+			instance = m_instances.insert(std::pair<DEVICEID_TYPE, BufferManager*>
+				(deviceId, new BufferManager())).first;
+			instance->second->m_deviceId = deviceId;
+		}
+		return instance->second;
 	}
 
 	// Request buffer from the buffer pool, or re-allocate a new memory
 	template<class ElemType>
-	ElemType* RequestBuffer(DEVICEID_TYPE deviceId, size_t size)
+	ElemType* RequestBuffer(size_t size)
 	{
 		ElemType* bufferPtr = nullptr;
 		auto& bufferContainor = BufferContainor<ElemType>();
 
-		auto deviceBufferList = bufferContainor.find(deviceId);
-		if (deviceBufferList != bufferContainor.end()) {
-			auto sizeBufferList = deviceBufferList->second.find(size);
-			if (sizeBufferList != deviceBufferList->second.end()) {
-				if (sizeBufferList->second.size()) {
-					bufferPtr = sizeBufferList->second.back();
-					sizeBufferList->second.pop_back();
-					return bufferPtr;
-				}
-			}
+		auto bufferHint = bufferContainor.lower_bound(size);
+
+		if (bufferHint != bufferContainor.end() && bufferHint->first < size * MEM_MAX_LIMIT_TIMES) {
+			bufferPtr = bufferHint->second;
+			bufferContainor.erase(bufferHint);
+			return bufferPtr;
 		}
 
-		if (deviceId >= 0) {
-			bufferPtr = TracingGPUMemoryAllocator::Allocate<ElemType>(deviceId, size);
+		if (m_deviceId >= 0) {
+			bufferPtr = TracingGPUMemoryAllocator::Allocate<ElemType>(m_deviceId, size);
 		}
 		else {
-			bufferPtr = new ElemType[size]();
+			bufferPtr = new ElemType[size];
 		}
 
 		return bufferPtr;
@@ -258,29 +268,19 @@ public:
 
 	// Release targeting buffer into buffer pool
 	template<class ElemType>
-	void LogicalReleaseBuffer(DEVICEID_TYPE deviceId, ElemType* buffer, size_t size)
+	void LogicalReleaseBuffer(ElemType* buffer, size_t size)
 	{
 		auto& bufferContainor = BufferContainor<ElemType>();
-		auto deviceBufferList = bufferContainor.find(deviceId);
-		if (deviceBufferList == bufferContainor.find(deviceId)) {
-			deviceBufferList = bufferContainor.insert(pair<DEVICEID_TYPE, unordered_map<size_t,
-				vector<ElemType*>>>(deviceId, unordered_map<size_t, vector<ElemType*>>())).first;
-		}
-		auto sizeBufferList = deviceBufferList->second.find(size);
-		if (sizeBufferList == deviceBufferList->second.end()) {
-			sizeBufferList = deviceBufferList->second.insert(pair<size_t,
-				vector<ElemType*>>(size, vector<ElemType*>(0))).first;
-		}
-		sizeBufferList->second.push_back(buffer);
-		buffer = nullptr;
+		bufferContainor.insert(std::pair<size_t, ElemType*>
+			(size, buffer));
 	}
 
 	// Release targeting buffer in buffer pool
-	template<class ELemType>
-	void PhysicalReleaseBuffer(DEVICEID_TYPE deviceId, float* buffer)
+	template<class ElemType>
+	void PhysicalReleaseBuffer(ElemType* buffer)
 	{
-		if (deviceId >= 0) {
-			TracingGPUMemoryAllocator::Free<float>(deviceId, buffer, false);
+		if (m_deviceId >= 0) {
+			TracingGPUMemoryAllocator::Free<ElemType>(m_deviceId, buffer, false);
 		}
 		else {
 			delete[] buffer;
@@ -291,26 +291,27 @@ public:
 	template<class ElemType>
 	void PhysicalReleaseAllBuffer()
 	{
-		for (auto deviceBufferList : bufferContainor) {
-			for (auto sizeBufferList : deviceBufferList.second) {
-				for (auto bufferList : sizeBufferList.second) {
-					PhysicalReleaseBuffer<ElemType>(deviceBufferList.first, bufferList);
-				}
-			}
+		auto& bufferContainor = BufferContainor<ElemType>();
+
+		for (auto& iter : bufferContainor) {
+			PhysicalReleaseBuffer<ElemType>(iter.second);
 		}
+
+		bufferContainor.clear();
 	}
 
 private:
+	static std::unordered_map<DEVICEID_TYPE, BufferManager*> m_instances;
+
 	template <class ElemType>
-	unordered_map<DEVICEID_TYPE, unordered_map<size_t, vector<ElemType*>>>& BufferContainor();
+	std::multimap<size_t, ElemType*>& BufferContainor();
+	DEVICEID_TYPE m_deviceId;
 
-	static BufferManager* m_instance;
-
-	// hash map to store all the buffer released
-	unordered_map<DEVICEID_TYPE, unordered_map<size_t, vector<float*>>> m_bufferFloatContainor;
-	unordered_map<DEVICEID_TYPE, unordered_map<size_t, vector<double*>>> m_bufferDoubleContainor;
-	unordered_map<DEVICEID_TYPE, unordered_map<size_t, vector<char*>>> m_bufferCharContainor;
-	unordered_map<DEVICEID_TYPE, unordered_map<size_t, vector<short*>>> m_bufferShortContainor;
+	// map to store all the temp buffer handle
+	std::multimap<size_t, float*> m_bufferFloatContainor;
+	std::multimap<size_t, double*> m_bufferDoubleContainor;
+	std::multimap<size_t, char*> m_bufferCharContainor;
+	std::multimap<size_t, short*> m_bufferShortContainor;
 };
 
 
