@@ -62,11 +62,11 @@ public:
     template <typename AllocatedElemType>
     static void Free(int deviceId, AllocatedElemType* bufferPtr, bool ignoreCUDARetCode = false);
 
+	static std::pair<size_t, size_t> GetFreeAndTotalMemoryInMBs(int deviceId);
+
 private:
     template <typename AllocatedElemType>
     static AllocatedElemType* AllocateNoTrace(int deviceId, size_t numElements);
-
-    static std::pair<size_t, size_t> GetFreeAndTotalMemoryInMBs(int deviceId);
 };
 
 // -----------------------------------------------------------------------
@@ -237,6 +237,8 @@ public:
 			instance = m_instances.insert(std::pair<DEVICEID_TYPE, BufferManager*>
 				(deviceId, new BufferManager())).first;
 			instance->second->m_deviceId = deviceId;
+			instance->second->m_totalManageSize = 0;
+			instance->second->m_totalAllocSize = 0;
 		}
 		return instance->second;
 	}
@@ -252,11 +254,19 @@ public:
 
 		if (bufferHint != bufferContainor.end() && bufferHint->first < size * MEM_MAX_LIMIT_TIMES) {
 			bufferPtr = bufferHint->second;
+			m_totalManageSize -= bufferHint->first;
 			bufferContainor.erase(bufferHint);
 			return bufferPtr;
 		}
 
+		m_totalAllocSize += size;
+
 		if (m_deviceId >= 0) {
+			auto deviceSize = TracingGPUMemoryAllocator::GetFreeAndTotalMemoryInMBs(m_deviceId);
+			float utilizeRatio = (float)deviceSize.first / deviceSize.second;
+			if (utilizeRatio < 0.05f) {
+				PhysicalReleaseAllBuffer<ElemType>();
+			}
 			bufferPtr = TracingGPUMemoryAllocator::Allocate<ElemType>(m_deviceId, size);
 		}
 		else {
@@ -273,6 +283,7 @@ public:
 		auto& bufferContainor = BufferContainor<ElemType>();
 		bufferContainor.insert(std::pair<size_t, ElemType*>
 			(size, buffer));
+		m_totalManageSize += size;
 	}
 
 	// Release targeting buffer in buffer pool
@@ -306,6 +317,8 @@ private:
 	template <class ElemType>
 	std::multimap<size_t, ElemType*>& BufferContainor();
 	DEVICEID_TYPE m_deviceId;
+	size_t m_totalManageSize;
+	size_t m_totalAllocSize;
 
 	// map to store all the temp buffer handle
 	std::multimap<size_t, float*> m_bufferFloatContainor;

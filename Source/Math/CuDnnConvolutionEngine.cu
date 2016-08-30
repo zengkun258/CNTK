@@ -240,6 +240,10 @@ protected:
             if (CUDNN_STATUS_SUCCESS == err2)
                 err = CUDNN_STATUS_SUCCESS;
         }
+
+		// Only supported in MatrixPool enable
+		workspace.Resize(0, 0);
+
         CUDNN_CALL(err);
     }
 

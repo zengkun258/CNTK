@@ -1395,6 +1395,13 @@ public:
 #endif
         // tracing
         Trace();
+
+		for (auto& input : GetInputs()) {
+			if (!input->IsOutputNeededDuringBackprop()) {
+				shared_ptr<Matrix<ElemType>> inputMatrix = static_pointer_cast<Matrix<ElemType>>(input->ValuePtr());
+				inputMatrix->Resize(0, 0);
+			}
+		}
     }
 
 #if 0   // (keep it around in case we need to add stuff in the future)
@@ -1420,6 +1427,11 @@ public:
             }
         }
 #endif
+
+		if (!NeedsGradient() && IsValueSharable()) {
+			if(ValuePtr()) Value().Resize(0, 0);
+			if (GradientPtr()) Gradient().Resize(0, 0);
+		}
     }
 #endif
 
