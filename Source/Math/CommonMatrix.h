@@ -40,7 +40,7 @@ typedef unsigned char byte;
 #define GPUSPARSE_INDEX_TYPE int // cuSparse only supports int array indexes
 #define CPUSPARSE_INDEX_TYPE int // to be consistent with cuSparse but limited the possible size of the matrix.
 
-#define MEM_MAX_LIMIT_TIMES 5
+#define MEM_MAX_LIMIT_TIMES 2
 
 namespace Microsoft { namespace MSR { namespace CNTK {
 
