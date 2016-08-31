@@ -262,12 +262,14 @@ public:
 		m_totalAllocSize += size;
 
 		if (m_deviceId >= 0) {
+#ifndef CPUONLY
 			auto deviceSize = TracingGPUMemoryAllocator::GetFreeAndTotalMemoryInMBs(m_deviceId);
 			float utilizeRatio = (float)deviceSize.first / deviceSize.second;
 			if (utilizeRatio < 0.05f) {
 				PhysicalReleaseAllBuffer<ElemType>();
 			}
 			bufferPtr = TracingGPUMemoryAllocator::Allocate<ElemType>(m_deviceId, size);
+#endif
 		}
 		else {
 			bufferPtr = new ElemType[size];
@@ -291,7 +293,9 @@ public:
 	void PhysicalReleaseBuffer(ElemType* buffer)
 	{
 		if (m_deviceId >= 0) {
+#ifndef CPUONLY
 			TracingGPUMemoryAllocator::Free<ElemType>(m_deviceId, buffer, false);
+#endif
 		}
 		else {
 			delete[] buffer;
