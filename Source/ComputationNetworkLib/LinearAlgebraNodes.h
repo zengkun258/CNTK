@@ -1192,4 +1192,51 @@ private:
 template class CosDistanceWithNegativeSamplesNode<float>;
 template class CosDistanceWithNegativeSamplesNode<double>;
 
+// -----------------------------------------------------------------------
+// AccumulatorNode calculates mean values of all samples used in forward pass.
+// During training, mean sample value is calculated in each epoch. Value of the node will contain mean sample value of
+// its input node values since the beginning of epoch.
+// -----------------------------------------------------------------------
+template <class ElemType>
+class AccumulatorNode : public ComputationNodeNonLooping<ElemType>, public NumInputs<1>
+{
+    typedef ComputationNodeNonLooping<ElemType> Base;
+    UsingComputationNodeMembersBoilerplate;
+    static const std::wstring TypeName();
+
+public:
+    AccumulatorNode(DEVICEID_TYPE deviceId, const wstring& name);
+
+    AccumulatorNode(const ScriptableObjects::IConfigRecordPtr configp);
+
+    virtual void BackpropToNonLooping(size_t inputIndex) override;
+
+    virtual bool OutputUsedInComputingInputNodesGradients() const override;
+
+    virtual bool InputUsedInComputingInputNodesGradients(size_t childIndex) const override;
+
+    virtual void OnEpochStart() override;
+
+    virtual void /*ComputationNodeNonLooping::*/ ForwardPropNonLooping() override;
+
+    virtual void CopyTo(ComputationNodeBasePtr nodeP, const std::wstring& newName,
+                        const CopyNodeFlags flags) const override;
+
+    virtual void Validate(bool isFinalValidationPass);
+
+    // Request matrices needed to do node function value evaluation.
+    virtual void RequestMatricesBeforeForwardProp(MatrixPool& matrixPool) override;
+
+    // We don't release accumulator as it is needed after forward pass.
+
+    virtual void Save(File& fstream) const override;
+
+    virtual void Load(File& fstream, size_t modelVersion) override;
+
+protected:
+    void Reset();
+
+    shared_ptr<Matrix<ElemType>> m_accumulator;
+    size_t m_numSamples;
+};
 }}}
