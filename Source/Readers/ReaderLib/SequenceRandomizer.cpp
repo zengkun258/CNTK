@@ -118,6 +118,19 @@ namespace Microsoft { namespace MSR { namespace CNTK {
                candidateToUnload < m_randomizedChunks[currentChunk].m_randomizationWindow.m_begin &&
                m_randomizedChunks[candidateToUnload].m_randomizationWindow.m_end <= m_currentChunkCursor)
         {
+            // Make a correctness check:
+            const auto& randomizedChunk = m_chunkWindow.front();
+            for (size_t i = m_currentChunkCursor - m_chunkWindowBegin; i < m_sequenceWindow.size(); ++i)
+            {
+                for (const auto& s : m_sequenceWindow[i])
+                {
+                    if (s.m_chunk->m_original->m_id == randomizedChunk.m_original->m_id)
+                    {
+                        RuntimeError("We have got it all wrong.");
+                    }
+                }
+            }
+
             m_sequenceWindow.pop_front();
             m_chunkWindow.pop_front();
             m_randomizedChunkInfo.pop_front();
@@ -268,7 +281,7 @@ namespace Microsoft { namespace MSR { namespace CNTK {
         size_t randomizedWindowEndInSamples = 0;
         if (!m_randomizedChunkInfo.empty())
         {
-            randomizeWindowBeginInSamples = m_randomizedChunkInfo.front().start;
+            randomizeWindowBeginInSamples = m_randomizedChunkInfo[m_currentChunkCursor - m_chunkWindowBegin].start;
             randomizedWindowEndInSamples = m_randomizedChunkInfo.back().start + m_randomizedChunkInfo.back().numberOfSamples;
         }
 

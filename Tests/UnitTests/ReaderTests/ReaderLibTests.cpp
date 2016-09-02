@@ -238,7 +238,7 @@ BOOST_AUTO_TEST_CASE(RandRollbackToSameEpochInTheSweep)
     size_t chunkSizeInSamples = 10000;
     size_t sweepNumberOfSamples = 500000;
     uint32_t maxSequenceLength = 300;
-    size_t randomizationWindow = chunkSizeInSamples * 3;
+    size_t randomizationWindow = sweepNumberOfSamples / 2;
     auto deserializer = make_shared<SequentialDeserializer>(0, chunkSizeInSamples, sweepNumberOfSamples, maxSequenceLength);
 
     // Let's randomize complete sweep, so that we have a baseline.
@@ -248,16 +248,24 @@ BOOST_AUTO_TEST_CASE(RandRollbackToSameEpochInTheSweep)
     auto firstSweep = ReadFullSweep(randomizer, 0, sweepNumberOfSamples);
 
     // Ok, now let's run smaller epochs and check whether they are the same as full sweeps.
-    size_t epochSize = firstSweep.size() / 4;
+    size_t epochSize = firstSweep.size() / 5;
     auto firstEpoch = ReadFullEpoch(randomizer, epochSize, 0);
     auto secondEpoch = ReadFullEpoch(randomizer, epochSize, 1);
     auto thirdEpoch = ReadFullEpoch(randomizer, epochSize, 2);
+    auto fourthEpoch = ReadFullEpoch(randomizer, epochSize, 3);
 
     // Now roll back to the third one.
-    auto anotherThirdEpoch = ReadFullEpoch(randomizer, epochSize, 2);
+    auto current = ReadFullEpoch(randomizer, epochSize, 1);
+    BOOST_CHECK_EQUAL_COLLECTIONS(secondEpoch.begin(), secondEpoch.end(), current.begin(), current.end());
 
-    // Check that it is the same.
-    BOOST_CHECK_EQUAL_COLLECTIONS(thirdEpoch.begin(), thirdEpoch.end(), anotherThirdEpoch.begin(), anotherThirdEpoch.end());
+    current = ReadFullEpoch(randomizer, epochSize, 3);
+    BOOST_CHECK_EQUAL_COLLECTIONS(fourthEpoch.begin(), fourthEpoch.end(), current.begin(), current.end());
+
+    current = ReadFullEpoch(randomizer, epochSize, 2);
+    BOOST_CHECK_EQUAL_COLLECTIONS(thirdEpoch.begin(), thirdEpoch.end(), current.begin(), current.end());
+
+    current = ReadFullEpoch(randomizer, epochSize, 2);
+    BOOST_CHECK_EQUAL_COLLECTIONS(thirdEpoch.begin(), thirdEpoch.end(), current.begin(), current.end());
 }
 
 BOOST_AUTO_TEST_CASE(BlockRandomizerInstantiate)
