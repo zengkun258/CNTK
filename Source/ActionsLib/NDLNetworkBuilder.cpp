@@ -551,8 +551,11 @@ void NDLNodeEvaluatorImpl<ElemType>::Evaluate(NDLNode<ElemType>* node, const wst
             int offsetX = ((NDLNode<ElemType>*) params[0])->GetScalar();
             int offsetY = ((NDLNode<ElemType>*) params[1])->GetScalar();
 
+            if (offsetX < 0 || offsetX < 0)
+                RuntimeError("Offsets in crop node must be non-negative");
+
             // Create crop node without inputs (will be attached later).
-            nodePtr = builder.Crop(nullptr, nullptr, offsetX, offsetY, name);
+            nodePtr = builder.Crop(nullptr, nullptr, static_cast<size_t>(offsetX), static_cast<size_t>(offsetY), name);
         }
     }
     else
