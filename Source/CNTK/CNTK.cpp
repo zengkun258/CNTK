@@ -21,6 +21,7 @@
 #include "SimpleNetworkBuilder.h"
 #include "NDLNetworkBuilder.h"
 #include "ModelEditLanguage.h"
+#include "Matrix.h"
 #include "CPUMatrix.h" // used for SetNumThreads()
 #include "GPUMatrix.h" // used for SyncGuard::EnableSync()
 #include "CommonMatrix.h"
@@ -218,6 +219,8 @@ void DoCommands(const ConfigParameters& config, const shared_ptr<MPIWrapper>& mp
         {
             ProgressTracing::SetStepOffset(fullEpochsOffset); // this is the epoch number that SGD will log relative to
         }
+
+        Matrix<ElemType>::SetUseCachedMatrixBuffer(g_hyperCompressMemory);
 
         // determine the action to perform, and do it
         for (int j = 0; j < action.size(); j++)
