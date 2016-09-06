@@ -214,7 +214,8 @@ class BufferManager
 {
 private:
     BufferManager() = default;
-    ~BufferManager() {
+    ~BufferManager() 
+    {
         for (auto &iter : m_instances) 
         {
             delete iter.second;
