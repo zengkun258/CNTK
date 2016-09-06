@@ -1396,12 +1396,14 @@ public:
         // tracing
         Trace();
 
-		for (auto& input : GetInputs()) {
-			if (!input->IsOutputNeededDuringBackprop()) {
-				shared_ptr<Matrix<ElemType>> inputMatrix = static_pointer_cast<Matrix<ElemType>>(input->ValuePtr());
-				inputMatrix->Resize(0, 0);
-			}
-		}
+        for (auto& input : GetInputs()) 
+        {
+            if (!input->IsOutputNeededDuringBackprop()) 
+            {
+                shared_ptr<Matrix<ElemType>> inputMatrix = static_pointer_cast<Matrix<ElemType>>(input->ValuePtr());
+                inputMatrix->Resize(0, 0);
+            }
+        }
     }
 
 #if 0   // (keep it around in case we need to add stuff in the future)
@@ -1428,14 +1430,16 @@ public:
         }
 #endif
 #endif
-		if (IsValueSharable()) {
-			if (GradientPtr()) Gradient().Resize(0, 0);
+        if (IsValueSharable())
+        {
+            if (GradientPtr()) Gradient().Resize(0, 0);
 
-			// canceling the graph dependency
-			if (IsOutputNeededDuringBackprop()) {
-				Value().Resize(0, 0);
-			}
-		}
+            // canceling the graph dependency
+            if (IsOutputNeededDuringBackprop()) 
+            {
+                Value().Resize(0, 0);
+            }
+        }
     }
 
     // this is the entry point from Network; while it will call virtual BackpropTo() into the actual node implementation

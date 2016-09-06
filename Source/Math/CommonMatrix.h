@@ -62,7 +62,7 @@ public:
     template <typename AllocatedElemType>
     static void Free(int deviceId, AllocatedElemType* bufferPtr, bool ignoreCUDARetCode = false);
 
-	static std::pair<size_t, size_t> GetFreeAndTotalMemoryInMBs(int deviceId);
+    static std::pair<size_t, size_t> GetFreeAndTotalMemoryInMBs(int deviceId);
 
 private:
     template <typename AllocatedElemType>
@@ -213,122 +213,128 @@ enum MatrixFlags
 class BufferManager
 {
 private:
-	BufferManager() = default;
-	~BufferManager() {
-		for (auto &iter : m_instances) {
-			delete iter.second;
-			iter.second = nullptr;
-		}
-		m_instances.clear();
-	}
+    BufferManager() = default;
+    ~BufferManager() {
+        for (auto &iter : m_instances) 
+        {
+            delete iter.second;
+            iter.second = nullptr;
+        }
+        m_instances.clear();
+    }
 	
-	// Disable all the copy & move functions to keep the instance safely
-	BufferManager(const BufferManager&) = delete;
-	BufferManager(BufferManager&&) = delete;
-	BufferManager& operator= (const BufferManager &) = delete;
-	BufferManager& operator= (BufferManager &&) = delete;
+    // Disable all the copy & move functions to keep the instance safely
+    BufferManager(const BufferManager&) = delete;
+    BufferManager(BufferManager&&) = delete;
+    BufferManager& operator= (const BufferManager &) = delete;
+    BufferManager& operator= (BufferManager &&) = delete;
 
 public:
-	static BufferManager* GetManagerInstance(DEVICEID_TYPE deviceId)
-	{
-		auto instance = m_instances.find(deviceId);
-		// BUGBUG: don't consider thread safe here, should we?
-		if (instance == m_instances.end()) { 
-			instance = m_instances.insert(std::pair<DEVICEID_TYPE, BufferManager*>
-				(deviceId, new BufferManager())).first;
-			instance->second->m_deviceId = deviceId;
-			instance->second->m_totalManageSize = 0;
-			instance->second->m_totalAllocSize = 0;
-		}
-		return instance->second;
-	}
+    static BufferManager* GetManagerInstance(DEVICEID_TYPE deviceId)
+    {
+        auto instance = m_instances.find(deviceId);
+        // BUGBUG: don't consider thread safe here, should we?
+        if (instance == m_instances.end()) 
+        {
+            instance = m_instances.insert(std::pair<DEVICEID_TYPE, BufferManager*>
+                (deviceId, new BufferManager())).first;
+            instance->second->m_deviceId = deviceId;
+            instance->second->m_totalManageSize = 0;
+            instance->second->m_totalAllocSize = 0;
+        }
+        return instance->second;
+    }
 
-	// Request buffer from the buffer pool, or re-allocate a new memory
-	template<class ElemType>
-	ElemType* RequestBuffer(size_t size)
-	{
-		ElemType* bufferPtr = nullptr;
-		auto& bufferContainor = BufferContainor<ElemType>();
+    // Request buffer from the buffer pool, or re-allocate a new memory
+    template<class ElemType>
+    ElemType* RequestBuffer(size_t size)
+    {
+        ElemType* bufferPtr = nullptr;
+        auto& bufferContainor = BufferContainor<ElemType>();
 
-		auto bufferHint = bufferContainor.lower_bound(size);
+        auto bufferHint = bufferContainor.lower_bound(size);
 
-		if (bufferHint != bufferContainor.end() && bufferHint->first < size * MEM_MAX_LIMIT_TIMES) {
-			bufferPtr = bufferHint->second;
-			m_totalManageSize -= bufferHint->first;
-			bufferContainor.erase(bufferHint);
-			return bufferPtr;
-		}
+        if (bufferHint != bufferContainor.end() && bufferHint->first < size * MEM_MAX_LIMIT_TIMES) 
+        {
+            bufferPtr = bufferHint->second;
+            m_totalManageSize -= bufferHint->first;
+            bufferContainor.erase(bufferHint);
+            return bufferPtr;
+        }
 
-		m_totalAllocSize += size;
+        m_totalAllocSize += size;
 
-		if (m_deviceId >= 0) {
+        if (m_deviceId >= 0) {
 #ifndef CPUONLY
-			auto deviceSize = TracingGPUMemoryAllocator::GetFreeAndTotalMemoryInMBs(m_deviceId);
-			float utilizeRatio = (float)deviceSize.first / deviceSize.second;
-			if (utilizeRatio < 0.05f) {
-				PhysicalReleaseAllBuffer<ElemType>();
-			}
-			bufferPtr = TracingGPUMemoryAllocator::Allocate<ElemType>(m_deviceId, size);
+            auto deviceSize = TracingGPUMemoryAllocator::GetFreeAndTotalMemoryInMBs(m_deviceId);
+            float utilizeRatio = (float)deviceSize.first / deviceSize.second;
+            if (utilizeRatio < 0.05f) 
+            {
+                PhysicalReleaseAllBuffer<ElemType>();
+            }
+            bufferPtr = TracingGPUMemoryAllocator::Allocate<ElemType>(m_deviceId, size);
 #endif
-		}
-		else {
-			bufferPtr = new ElemType[size];
-		}
+        }
+        else 
+        {
+            bufferPtr = new ElemType[size];
+        }
 
-		return bufferPtr;
-	}
+        return bufferPtr;
+    }
 
-	// Release targeting buffer into buffer pool
-	template<class ElemType>
-	void LogicalReleaseBuffer(ElemType* buffer, size_t size)
-	{
-		auto& bufferContainor = BufferContainor<ElemType>();
-		bufferContainor.insert(std::pair<size_t, ElemType*>
-			(size, buffer));
-		m_totalManageSize += size;
-	}
+    // Release targeting buffer into buffer pool
+    template<class ElemType>
+    void LogicalReleaseBuffer(ElemType* buffer, size_t size)
+    {
+        auto& bufferContainor = BufferContainor<ElemType>();
+        bufferContainor.insert(std::pair<size_t, ElemType*>(size, buffer));
+        m_totalManageSize += size;
+    }
 
-	// Release targeting buffer in buffer pool
-	template<class ElemType>
-	void PhysicalReleaseBuffer(ElemType* buffer)
-	{
-		if (m_deviceId >= 0) {
+    // Release targeting buffer in buffer pool
+    template<class ElemType>
+    void PhysicalReleaseBuffer(ElemType* buffer)
+    {
+        if (m_deviceId >= 0) 
+        {
 #ifndef CPUONLY
-			TracingGPUMemoryAllocator::Free<ElemType>(m_deviceId, buffer, false);
+            TracingGPUMemoryAllocator::Free<ElemType>(m_deviceId, buffer, false);
 #endif
-		}
-		else {
-			delete[] buffer;
-		}
-	}
+        }
+        else {
+            delete[] buffer;
+        }
+    }
 
-	// Release all buffer cache in buffer pool
-	template<class ElemType>
-	void PhysicalReleaseAllBuffer()
-	{
-		auto& bufferContainor = BufferContainor<ElemType>();
+    // Release all buffer cache in buffer pool
+    template<class ElemType>
+    void PhysicalReleaseAllBuffer()
+    {
+        auto& bufferContainor = BufferContainor<ElemType>();
 
-		for (auto& iter : bufferContainor) {
-			PhysicalReleaseBuffer<ElemType>(iter.second);
-		}
+        for (auto& iter : bufferContainor) 
+        {
+            PhysicalReleaseBuffer<ElemType>(iter.second);
+        }
 
-		bufferContainor.clear();
-	}
+        bufferContainor.clear();
+    }
 
 private:
-	static std::unordered_map<DEVICEID_TYPE, BufferManager*> m_instances;
+    static std::unordered_map<DEVICEID_TYPE, BufferManager*> m_instances;
 
-	template <class ElemType>
-	std::multimap<size_t, ElemType*>& BufferContainor();
-	DEVICEID_TYPE m_deviceId;
-	size_t m_totalManageSize;
-	size_t m_totalAllocSize;
+    template <class ElemType>
+    std::multimap<size_t, ElemType*>& BufferContainor();
+    DEVICEID_TYPE m_deviceId;
+    size_t m_totalManageSize;
+    size_t m_totalAllocSize;
 
-	// map to store all the temp buffer handle
-	std::multimap<size_t, float*> m_bufferFloatContainor;
-	std::multimap<size_t, double*> m_bufferDoubleContainor;
-	std::multimap<size_t, char*> m_bufferCharContainor;
-	std::multimap<size_t, short*> m_bufferShortContainor;
+    // map to store all the temp buffer handle
+    std::multimap<size_t, float*> m_bufferFloatContainor;
+    std::multimap<size_t, double*> m_bufferDoubleContainor;
+    std::multimap<size_t, char*> m_bufferCharContainor;
+    std::multimap<size_t, short*> m_bufferShortContainor;
 };
 
 
