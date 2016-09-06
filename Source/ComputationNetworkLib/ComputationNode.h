@@ -44,6 +44,7 @@
 #define CURRENT_CNTK_MODEL_VERSION CNTK_MODEL_VERSION_12
 
 extern bool g_shareNodeValueMatrices;
+extern bool g_hyperCompressMemory;
 
 // helper mode for debugging
 // If TRACK_GAP_NANS is defined then initialize layout gaps to NaN and do NaN checks. Also do detailed logging of node computations.
@@ -762,6 +763,7 @@ public:
 
     void SetOutputNeededDuringBackprop(bool f) { m_outputNeededDuringBackprop = f; }
     bool IsOutputNeededDuringBackprop() const { return !g_shareNodeValueMatrices || m_outputNeededDuringBackprop; }
+    bool IsHyperCompressMemory() const { return g_hyperCompressMemory; }
 
     // -----------------------------------------------------------------------
     // helpers for network traversal
@@ -1398,7 +1400,7 @@ public:
 
         for (auto& input : GetInputs()) 
         {
-            if (!input->IsOutputNeededDuringBackprop()) 
+            if (!input->IsOutputNeededDuringBackprop() && IsHyperCompressMemory()) 
             {
                 shared_ptr<Matrix<ElemType>> inputMatrix = static_pointer_cast<Matrix<ElemType>>(input->ValuePtr());
                 inputMatrix->Resize(0, 0);
@@ -1430,7 +1432,7 @@ public:
         }
 #endif
 #endif
-        if (IsValueSharable())
+        if (IsValueSharable() && IsHyperCompressMemory())
         {
             if (GradientPtr()) Gradient().Resize(0, 0);
 

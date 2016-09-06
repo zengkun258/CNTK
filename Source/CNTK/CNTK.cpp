@@ -64,6 +64,7 @@
 // node output value matrices. This will go away when the
 // sharing is ready to be enabled by default
 bool g_shareNodeValueMatrices = false;
+bool g_hyperCompressMemory = false;
 
 using namespace std;
 using namespace Microsoft::MSR;
@@ -513,6 +514,7 @@ int wmainWithBS(int argc, wchar_t* argv[]) // called from wmain which is a wrapp
         mpi = MPIWrapper::GetInstance(true /*create*/);
 
     g_shareNodeValueMatrices = config(L"shareNodeValueMatrices", false);
+    g_hyperCompressMemory = config(L"hyperCompressMemory", false);
 
     TracingGPUMemoryAllocator::SetTraceLevel(config(L"traceGPUMemoryAllocations", 0));
 
@@ -628,6 +630,7 @@ int wmainOldCNTKConfig(int argc, wchar_t* argv[])
         mpi = MPIWrapper::GetInstance(true /*create*/);
 
     g_shareNodeValueMatrices = config(L"shareNodeValueMatrices", false);
+    g_hyperCompressMemory = config(L"hyperCompressMemory", false);
 
     TracingGPUMemoryAllocator::SetTraceLevel(config(L"traceGPUMemoryAllocations", 0));
 
