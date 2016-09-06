@@ -73,8 +73,6 @@ private:
     mutable size_t m_numTimesDeviceChanged;
     mutable size_t m_numTimesMatrixTypeChanged;
     mutable int m_devicesTransferedTo[2]; // TODO: what is this for? Seems only diagnostics
-    
-    static bool m_useCachedMatrix;
 
     // Moves matrix from device id_from to device with id_to. This method doesn't change preferred device Id
     void _transferFromDeviceToDevice(int id_from, int id_to, bool isBeingMoved = true, bool emptyTransfer = false) const;
@@ -109,8 +107,6 @@ public:
     // inadvertent silent deep copying
     Matrix(const Matrix<ElemType>& deepCopyFrom) = delete;
     Matrix<ElemType>& operator=(const Matrix<ElemType>& deepCopyFrom) = delete;
-
-    static void IsEnableCachedMatrix(bool isEnable) { m_useCachedMatrix = isEnable; }
 
     static Matrix<ElemType> Ones(const size_t rows, const size_t cols, DEVICEID_TYPE deviceId);
     static Matrix<ElemType> Zeros(const size_t rows, const size_t cols, DEVICEID_TYPE deviceId);
