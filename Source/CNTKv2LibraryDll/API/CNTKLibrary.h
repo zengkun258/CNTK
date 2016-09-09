@@ -2321,9 +2321,13 @@ namespace CNTK
 
     ///
     /// A collection of key-value pairs that represents training parameter schedule in 
-    /// terms of the number of processed samples. 
+    /// terms of the number of processed samples (e.g., learning rate and momentum schedules). 
     /// This class provides a number of convenience constructors to allow easy conversion 
     /// from a single value, a vector of values and a list of pairs to the training schedule.
+    /// The class is designed to simplify Learner's factory methods by enabling training parameter 
+    /// specification using a syntax similar to that used in cntk config files. For example,
+    /// a learning rate schedule { { 10, 0.5 }, { 100, 0.3 }, { 20, 0.2 } } is equivalent to 
+    /// 10*0.5:100*0.3:20*0.2 value in a cntk configuration.
     ///
     template <typename T>
     class TrainingParameterSchedule
@@ -2332,31 +2336,14 @@ namespace CNTK
         ///
         /// Create a schedule with a constant parameter value.
         ///
-        TrainingParameterSchedule(T value)
-            : m_schedule({ std::make_pair(0, value) }), m_unit(1)
-        {}
+        CNTK_API TrainingParameterSchedule(T value);
 
         ///
         /// Create a schedule where the parameter changes its value every 'unit' samples:
         /// schedule[0] is used for the first 'unit' samples, schedule[1] -- for the second,
         /// and so on. The last value is then used repeatedly until the end of training.
         ///
-        TrainingParameterSchedule(const std::vector<T>& schedule, size_t unit = 1) 
-            : m_unit(unit)
-        {
-            // TODO: 0 will be used to mean "the entire sweep"
-            if (unit == 0)
-                RuntimeError("TrainingParameterSchedule::constructor : 'unit' cannot be 0.");
-
-            if (schedule.size() == 0)
-                RuntimeError("TrainingParameterSchedule::constructor : schedule is empty.");
-
-            size_t i = 1;
-            for (const auto& value : schedule)
-            {
-                m_schedule[m_unit * i++] = value;
-            }
-        }
+        CNTK_API TrainingParameterSchedule(const std::vector<T>& schedule, size_t unit = 1);
 
         ///
         /// Create a schedule using the list of key-value pairs, where the key specifies 
@@ -2367,39 +2354,57 @@ namespace CNTK
         /// '0.1' is used for the second 200 samples, after which the values is switched
         /// to '0.005'.
         ///
-        TrainingParameterSchedule(const std::initializer_list<std::pair<const size_t, T>>& schedule, size_t unit = 1)
-            : m_unit(unit)
-        {
-            // TODO: 0 will be used to mean "the entire sweep"
-            if (unit == 0)
-                RuntimeError("TrainingParameterSchedule::constructor : 'unit' cannot be 0.");
-
-            if (schedule.size() == 0)
-                RuntimeError("TrainingParameterSchedule::constructor : schedule is empty.");
-
-            size_t i = 0;
-            for (const auto& it : schedule)
-            {
-                if (it.first == 0)
-                    RuntimeError("TrainingParameterSchedule::constructor : unit count cannot be 0.");
-
-                i += it.first;
-                m_schedule[m_unit * i] = it.second;
-            }
-        }
+        CNTK_API TrainingParameterSchedule(const std::vector<const std::pair<size_t, T>>& schedule, size_t unit = 1);
 
         ///
         /// Returns a value corresponding to the absolute sample count from the beginning of training.
         ///
-        CNTK_API const T& operator[](size_t samleCount) const;
+        CNTK_API virtual const T& operator[](size_t samleCount) const;
 
+        CNTK_API virtual ~TrainingParameterSchedule();
+
+        CNTK_API TrainingParameterSchedule(const TrainingParameterSchedule<T>&); 
+        CNTK_API TrainingParameterSchedule(TrainingParameterSchedule<T>&&); 
+        CNTK_API TrainingParameterSchedule<T>& operator=(const TrainingParameterSchedule<T>&); 
+        CNTK_API TrainingParameterSchedule<T>& operator=(TrainingParameterSchedule<T>&&);
+    
     private:
+        // Private constructor with reversed order of arguments to avoid ambiguity with the constructor 
+        // above that takes the list of pairs as its first argument.
+        CNTK_API TrainingParameterSchedule(size_t unit, std::map<size_t, T>&& schedule);
+            
         std::map<size_t, T> m_schedule;
         size_t m_unit;
+
+        friend class MomentumValuesAsTimeConstants;
     };
 
     typedef TrainingParameterSchedule<double> LearningRatesPerSample;
-    typedef TrainingParameterSchedule<double> MomentumsPerSample;
+    typedef TrainingParameterSchedule<double> MomentumValuesPerSample;
+
+    class MomentumValuesAsTimeConstants: public TrainingParameterSchedule<int>
+    {
+    public:
+        // TODO: replace with using TrainingParameterSchedule::TrainingParameterSchedule once we're on VS2015
+        MomentumValuesAsTimeConstants(int value) 
+            : TrainingParameterSchedule(value)
+        { }
+        
+        MomentumValuesAsTimeConstants(const std::vector<int>& schedule, size_t unit = 1) 
+            : TrainingParameterSchedule(schedule, unit)
+        { }
+        
+        MomentumValuesAsTimeConstants(const std::vector<const std::pair<size_t, int>>& schedule, size_t unit = 1) 
+            : TrainingParameterSchedule(schedule, unit)
+        { }
+
+        ///
+        /// This allows to specify momentum as time constant in place of momentum per sample in 
+        /// all of Learners factory methods. The specified values are then automatically converted into 
+        /// per sample values.
+        /// 
+        CNTK_API operator MomentumValuesPerSample() const;
+    };
 
     ///
     /// Create an instance of the CNTK built-in SGD learner.
@@ -2414,7 +2419,7 @@ namespace CNTK
     ///
     CNTK_API LearnerPtr MomentumSGDLearner(const std::unordered_set<Parameter>& parameters, 
                                            const LearningRatesPerSample& learningRates,
-                                           const MomentumsPerSample& momentums,
+                                           const MomentumValuesPerSample& momentumValues,
                                            double clippingThresholdPerSample = std::numeric_limits<double>::infinity(),
                                            bool gradientClippingWithTruncation = true);
 
@@ -2423,7 +2428,7 @@ namespace CNTK
     ///
     CNTK_API LearnerPtr NesterovLearner(const std::unordered_set<Parameter>& parameters, 
                                         const LearningRatesPerSample& learningRates,
-                                        const MomentumsPerSample& momentums,
+                                        const MomentumValuesPerSample& momentumValues,
                                         double clippingThresholdPerSample = std::numeric_limits<double>::infinity(),
                                         bool gradientClippingWithTruncation = true);
 
@@ -2432,7 +2437,9 @@ namespace CNTK
     ///
     CNTK_API LearnerPtr FSAdaGradLearner(const std::unordered_set<Parameter>& parameters,
                                          const LearningRatesPerSample& learningRates,
-                                         const MomentumsPerSample& momentums,
+                                         const MomentumValuesPerSample& momentumValues,
+                                         const double targetAdagradAvDenom = 0.0025, // 1/400 magic constant 
+                                         const size_t adagradT = 2 * 3600 * 100,
                                          double clippingThresholdPerSample = std::numeric_limits<double>::infinity(),
                                          bool gradientClippingWithTruncation = true);
 

@@ -226,7 +226,7 @@ namespace CNTK
 
 #if DUMPOUTPUT
             auto learningRate = ElementType(m_learningRates[m_sampleCount]);
-            auto momentum = ElementType(MomentumPerMB(m_momentums[m_sampleCount], trainingSampleCount));
+            auto momentum = ElementType(MomentumValueForMB(m_momentumValues[m_sampleCount], trainingSampleCount));
             LOGPRINTF(stderr, "learnRatePerSample=%0.8f, momentum=%0.8f, actualMBSize=%ld\n",
                         learningRate, momentum, trainingSampleCount);
             LOGPRINTF(stderr, "GradUpdateType()=%s, GradientUpdateNoiseStd()=%0.8f\n",
@@ -352,9 +352,10 @@ namespace CNTK
         const auto& parameterMatrix = GetWritableMatrix<ElementType>(parameterValue);
 
         auto learningRate = ElementType(m_learningRates[m_sampleCount]);
-        auto momentum = ElementType(MomentumPerMB(m_momentums[m_sampleCount], trainingSampleCount));
+        auto momentum = ElementType(MomentumValueForMB(m_momentumValues[m_sampleCount], trainingSampleCount));
 
         // TODO: break up the NormalGrad into 3 different functions, each with its own set of parameters
+        // Also, come up with a better name for NormalGrad (Default? Regular? Plain?).
         // (one for vanilla SGD, the other for momentum SGD, and the third one for NAG).
         smoothedGradientMatrix->NormalGrad(*gradientMatrix, *parameterMatrix,
                                            learningRate, momentum, m_useNesterovAcceleration);
@@ -393,16 +394,21 @@ namespace CNTK
 
     LearnerFSAdaGrad::LearnerFSAdaGrad(const unordered_set<Parameter>& parameters, 
                                        const LearningRatesPerSample& learningRates, 
-                                       const MomentumsPerSample& momentums,
+                                       const MomentumValuesPerSample& momentumValues,
+                                       const double targetAdagradAvDenom /*= 0.0025*/,
+                                       const size_t adagradT /*= 2 * 3600 * 100*/,
                                        double clippingThresholdPerSample /*= std::numeric_limits<double>::infinity()*/,
                                        bool gradientClippingWithTruncation /*= true*/)
-        : LearnerMomentumSGD(parameters, learningRates, momentums, /*allocateSmoothGradients*/ false, clippingThresholdPerSample, gradientClippingWithTruncation)
+        : LearnerMomentumSGD(parameters, learningRates, momentumValues, /*allocateSmoothGradients*/ false, clippingThresholdPerSample, gradientClippingWithTruncation),
+        m_targetAdagradAvDenom(targetAdagradAvDenom),
+        m_adagradT(adagradT)
     {
         for (const auto& parameter : parameters)
         {  
             auto shape = GetMatrixShape(parameter);
             NDArrayViewPtr view = AllocateNDArrayView(parameter, {shape[0], 2 * shape[1]});
             m_smoothedGradientValues.insert(make_pair(parameter, view));
+            m_smoothedCounts.insert(make_pair(parameter, 0.0));
         }
     }
 
@@ -414,23 +420,18 @@ namespace CNTK
     template <typename ElementType>
     void LearnerFSAdaGrad::Update(const Parameter& parameter, const NDArrayViewPtr& gradientValue, const NDArrayViewPtr& smoothedGradientValue, size_t trainingSampleCount) const
     {
-        UNUSED(trainingSampleCount);
-
         const auto& parameterValue = parameter.Value();
         const auto& smoothedGradientMatrix = GetWritableMatrix<ElementType>(smoothedGradientValue);
         const auto& gradientMatrix = GetWritableMatrix<ElementType>(gradientValue);
         const auto& parameterMatrix = GetWritableMatrix<ElementType>(parameterValue);
         
         auto learningRate = m_learningRates[m_sampleCount];
-        auto momentum = MomentumPerMB(m_momentums[m_sampleCount], trainingSampleCount);
+        auto momentum = MomentumValueForMB(m_momentumValues[m_sampleCount], trainingSampleCount);
 
-        const double targetAdagradAvDenom = 0.0025; // 1/400 magic constant
-        const size_t adagradT = 2 * 3600 * 100;
+        const double varMomentum = (exp(-1.0 * trainingSampleCount / m_adagradT));
+        double& smoothedCount = m_smoothedCounts.at(parameter); 
 
-        const double varMomentum = (exp(-1.0 * trainingSampleCount / adagradT));
-        static double smoothedCount = 0;  // BUGBUG!!! Carried over from Alexey's original implementation, needs to be fixed.
-
-        smoothedGradientMatrix->FSAdagradUpdate(trainingSampleCount, *gradientMatrix, *parameterMatrix, smoothedCount, learningRate, targetAdagradAvDenom, momentum, varMomentum);
+        smoothedGradientMatrix->FSAdagradUpdate(trainingSampleCount, *gradientMatrix, *parameterMatrix, smoothedCount, learningRate, m_targetAdagradAvDenom, momentum, varMomentum);
     }
 
     LearnerRMSProp::LearnerRMSProp(const unordered_set<Parameter>& parameters, const LearningRatesPerSample& learningRates,
@@ -495,29 +496,31 @@ namespace CNTK
 
     LearnerPtr MomentumSGDLearner(const unordered_set<Parameter>& parameters,
                                   const LearningRatesPerSample& learningRates,
-                                  const MomentumsPerSample& momentums,
+                                  const MomentumValuesPerSample& momentumValues,
                                   double clippingThresholdPerSample /*= std::numeric_limits<double>::infinity()*/,
                                   bool gradientClippingWithTruncation /*= true*/)
     {
-        return MakeSharedObject<LearnerMomentumSGD>(parameters, learningRates, momentums, true, clippingThresholdPerSample, gradientClippingWithTruncation);
+        return MakeSharedObject<LearnerMomentumSGD>(parameters, learningRates, momentumValues, true, clippingThresholdPerSample, gradientClippingWithTruncation);
     }
 
     LearnerPtr NesterovLearner(const unordered_set<Parameter>& parameters,
                                const LearningRatesPerSample& learningRates,
-                               const MomentumsPerSample& momentums,
+                               const MomentumValuesPerSample& momentumValues,
                                double clippingThresholdPerSample /*= std::numeric_limits<double>::infinity()*/,
                                bool gradientClippingWithTruncation /*= true*/)
     {
-        return MakeSharedObject<LearnerNesterov>(parameters, learningRates, momentums, clippingThresholdPerSample, gradientClippingWithTruncation);
+        return MakeSharedObject<LearnerNesterov>(parameters, learningRates, momentumValues, clippingThresholdPerSample, gradientClippingWithTruncation);
     }
 
     LearnerPtr FSAdaGradLearner(const unordered_set<Parameter>& parameters,
                                 const LearningRatesPerSample& learningRates,
-                                const MomentumsPerSample& momentums,
+                                const MomentumValuesPerSample& momentumValues,
+                                const double targetAdagradAvDenom /*= 0.0025*/,
+                                const size_t adagradT /*= 2 * 3600 * 100*/,
                                 double clippingThresholdPerSample /*= std::numeric_limits<double>::infinity()*/,
                                 bool gradientClippingWithTruncation /*= true*/)
     {
-        return MakeSharedObject<LearnerFSAdaGrad>(parameters, learningRates, momentums, clippingThresholdPerSample, gradientClippingWithTruncation);
+        return MakeSharedObject<LearnerFSAdaGrad>(parameters, learningRates, momentumValues, targetAdagradAvDenom, adagradT, clippingThresholdPerSample, gradientClippingWithTruncation);
     }
 
     LearnerPtr AdaGradLearner(const unordered_set<Parameter>& parameters,

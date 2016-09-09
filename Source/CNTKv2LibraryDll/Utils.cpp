@@ -539,7 +539,7 @@ namespace CNTK
             return false;
         }
         
-        for (auto& kv : *m_dictionaryData)
+        for (const auto& kv : *m_dictionaryData)
         {
             auto result = other.m_dictionaryData->find(kv.first);
             if (result == other.m_dictionaryData->end() || kv.second != result->second)
@@ -561,7 +561,7 @@ namespace CNTK
         BinaryOStreamWrapper stream(stdStream);
         stream << us.version;
         stream << us.m_dictionaryData->size();
-        for (auto& kv : *(us.m_dictionaryData))
+        for (const auto& kv : *(us.m_dictionaryData))
         {
             stream << kv.first;
             stream << kv.second;
@@ -586,10 +586,67 @@ namespace CNTK
         return stream;
     }
 
+    template <typename T>
+    TrainingParameterSchedule<T>::TrainingParameterSchedule(T value) 
+        : m_schedule({ make_pair(0, value) }), m_unit(1)
+    {
+    }
+
+    template <typename T>
+    TrainingParameterSchedule<T>::TrainingParameterSchedule(size_t unit, map<size_t, T>&& schedule)
+        : m_schedule(forward<map<size_t, T>>(schedule)), m_unit(unit)
+    {
+    }
+
+    template <typename T>
+    TrainingParameterSchedule<T>::TrainingParameterSchedule(const vector<T>& schedule, size_t unit = 1) 
+        : m_unit(unit)
+    {
+        // TODO: 0 will be used to mean "the entire sweep"
+        if (unit == 0)
+            RuntimeError("TrainingParameterSchedule::constructor : 'unit' cannot be 0.");
+
+        if (schedule.size() == 0)
+            RuntimeError("TrainingParameterSchedule::constructor : schedule is empty.");
+
+        size_t i = 1;
+        for (const auto& value : schedule)
+        {
+            m_schedule[m_unit * i++] = value;
+        }
+    }
+
+    template <typename T>
+    TrainingParameterSchedule<T>::TrainingParameterSchedule(const vector<const pair<size_t, T>>& schedule, size_t unit = 1)
+        : m_unit(unit)
+    {
+        // TODO: 0 will be used to mean "the entire sweep"
+        if (unit == 0)
+            RuntimeError("TrainingParameterSchedule::constructor : 'unit' cannot be 0.");
+
+        if (schedule.size() == 0)
+            RuntimeError("TrainingParameterSchedule::constructor : schedule is empty.");
+
+        size_t i = 0;
+        for (const auto& it : schedule)
+        {
+            if (it.first == 0)
+                RuntimeError("TrainingParameterSchedule::constructor : unit count cannot be 0.");
+
+            i += it.first;
+            m_schedule[m_unit * i] = it.second;
+        }
+    }
+
+    template <typename T>
+    /*virtual*/ TrainingParameterSchedule<T>::~TrainingParameterSchedule()
+    {
+    }
+
     // Returns the element whose key is greater than the required sample count 
     // or the last element if no such key exists.
     template <typename T>
-    const T& TrainingParameterSchedule<T>::operator[](size_t sampleCount) const
+    /*virtual*/ const T& TrainingParameterSchedule<T>::operator[](size_t sampleCount) const
     {
         assert(m_schedule.size() > 0);
         auto it = m_schedule.upper_bound(sampleCount);
@@ -598,6 +655,40 @@ namespace CNTK
             --it;
         }
         return it->second;
+    }
+
+    template <typename T>
+    TrainingParameterSchedule<T>::TrainingParameterSchedule(const TrainingParameterSchedule<T>&) = default;
+
+    // cannot be defaulted due to a bug in VS2013 (https://connect.microsoft.com/VisualStudio/feedback/details/1255564)
+    template <typename T>
+    TrainingParameterSchedule<T>::TrainingParameterSchedule(TrainingParameterSchedule<T>&& that)
+        :m_schedule(move(that.m_schedule)), m_unit(that.m_unit)
+    {
+    }
+
+    template <typename T>
+    TrainingParameterSchedule<T>& TrainingParameterSchedule<T>::operator=(const TrainingParameterSchedule<T>&) = default;
+
+    // cannot be defaulted due to a bug in VS2013 (https://connect.microsoft.com/VisualStudio/feedback/details/1255564)
+    template <typename T>
+    TrainingParameterSchedule<T>& TrainingParameterSchedule<T>::operator=(TrainingParameterSchedule<T>&& that)
+    {
+        m_schedule = move(that.m_schedule);
+        m_unit = that.m_unit;
+        return *this;
+    }
+
+    MomentumValuesAsTimeConstants::operator MomentumValuesPerSample() const
+    {
+        map<size_t, double> momentumValues;
+        for (const auto& it : m_schedule)
+        {
+            double momTC = it.second;
+            double momPS = momTC == 0.0 ? 0 : exp(-1.0 / momTC);
+            momentumValues[it.first] = momPS;
+        }
+        return MomentumValuesPerSample(m_unit, move(momentumValues));
     }
 
     template void DictionaryValue::AllocateDataPtr<NDShape>(const NDShape& value);
@@ -614,5 +705,6 @@ namespace CNTK
     template void DictionaryValue::FreePtrAsType<Dictionary>();
     template void DictionaryValue::FreePtrAsType<NDArrayView>();
 
-    template const double& TrainingParameterSchedule<double>::operator[](size_t key) const;
+    template class TrainingParameterSchedule<double>;
+    template class TrainingParameterSchedule<int>;
 }

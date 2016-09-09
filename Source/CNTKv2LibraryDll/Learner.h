@@ -3,6 +3,8 @@
 // Licensed under the MIT license. See LICENSE.md file in the project root for full license information.
 //
 
+#pragma once
+
 #include "stdafx.h"
 #include "CNTKLibrary.h"
 #include <numeric>
@@ -33,6 +35,10 @@ namespace CNTK
 
         virtual void RestoreFromCheckpoint(const Dictionary& checkpoint) override final;
 
+        // allocateSmoothGradients flag specifies whether NDArrayViews for smoothed gradients can be allocated 
+        // in the base class constructor (in which case they are allocated with the shapes identical to the shapes of
+        // the corresponding parameters) or if the allocation should be deferred to the subclass constructor (which
+        // performs allocation that is specific to the particular learner, see FSAdaGrad and RMSProp).
     protected:
         LearnerBase(const std::unordered_set<Parameter>& parameters, 
                     const LearningRatesPerSample& learningRates,
@@ -84,6 +90,7 @@ namespace CNTK
         // Retrieves the shape of the matrix corresponding to the parameter value.
         static NDShape GetMatrixShape(const Parameter& parameter);
 
+
         size_t m_sampleCount;
         size_t m_minibatchCount;
 
@@ -110,7 +117,7 @@ namespace CNTK
                    double clippingThresholdPerSample = std::numeric_limits<double>::infinity(),
                    bool gradientClippingWithTruncation = true)
                    : LearnerBase(parameters, learningRates, allocateSmoothGradients, clippingThresholdPerSample, gradientClippingWithTruncation),
-            m_momentums(0.0), 
+            m_momentumValues(0.0), 
             m_useNesterovAcceleration(false)
         {}
 
@@ -121,8 +128,8 @@ namespace CNTK
         template <typename ElementType>
         void Update(const Parameter& parameter, const NDArrayViewPtr& gradientValue, const NDArrayViewPtr& smoothedGradientValue, size_t trainingSampleCount) const;
 
-        // TODO: Move m_momentums to LearnerMomentumSGD as soon as NormalGrad is refactored.
-        MomentumsPerSample m_momentums;
+        // TODO: Move m_momentumValues to LearnerMomentumSGD as soon as NormalGrad is refactored.
+        MomentumValuesPerSample m_momentumValues;
         bool m_useNesterovAcceleration;
     };
 
@@ -132,13 +139,13 @@ namespace CNTK
     public:
         LearnerMomentumSGD(const std::unordered_set<Parameter>& parameters, 
                            const LearningRatesPerSample& learningRates,
-                           const MomentumsPerSample& momentums,
+                           const MomentumValuesPerSample& momentumValues,
                            bool allocateSmoothGradients = true,
                            double clippingThresholdPerSample = std::numeric_limits<double>::infinity(),
                            bool gradientClippingWithTruncation = true)
                            : LearnerSGD(parameters, learningRates, allocateSmoothGradients, clippingThresholdPerSample, gradientClippingWithTruncation)
-        {
-            m_momentums = momentums;
+        {      
+            m_momentumValues = momentumValues;
         }
     };
 
@@ -149,10 +156,10 @@ namespace CNTK
 
         LearnerNesterov(const std::unordered_set<Parameter>& parameters, 
                         const LearningRatesPerSample& learningRates,
-                        const MomentumsPerSample& momentums,
+                        const MomentumValuesPerSample& momentumValues,
                         double clippingThresholdPerSample = std::numeric_limits<double>::infinity(),
                         bool gradientClippingWithTruncation = true)
-                        : LearnerMomentumSGD(parameters, learningRates, momentums, true, clippingThresholdPerSample, gradientClippingWithTruncation)
+                        : LearnerMomentumSGD(parameters, learningRates, momentumValues, true, clippingThresholdPerSample, gradientClippingWithTruncation)
         {
             m_useNesterovAcceleration = true;
         }
@@ -183,7 +190,9 @@ namespace CNTK
 
         LearnerFSAdaGrad(const std::unordered_set<Parameter>& parameters,
                          const LearningRatesPerSample& learningRates,
-                         const MomentumsPerSample& momentums,
+                         const MomentumValuesPerSample& momentumValues,
+                         const double targetAdagradAvDenom = 0.0025, // 1/400 magic constant
+                         const size_t adagradT = 2 * 3600 * 100,
                          double clippingThresholdPerSample = std::numeric_limits<double>::infinity(),
                          bool gradientClippingWithTruncation = true);
 
@@ -193,6 +202,11 @@ namespace CNTK
 
         template <typename ElementType>
         void Update(const Parameter& parameter, const NDArrayViewPtr& gradientValue, const NDArrayViewPtr& smoothedGradientValue, size_t trainingSampleCount) const;
+
+    private:
+        mutable std::unordered_map<Parameter, double> m_smoothedCounts;
+        double m_targetAdagradAvDenom;
+        size_t m_adagradT;
     };
 
     class LearnerRMSProp : public LearnerBase
