@@ -130,6 +130,21 @@
     <ClInclude Include="Function.h" />
     <ClInclude Include="Learner.h" />
     <ClInclude Include="MinibatchSource.h" />
+    <ClInclude Include="Serialization\PlatformSocket.h" />
+    <ClInclude Include="Serialization\TBinaryProtocol.h" />
+    <ClInclude Include="Serialization\TFDTransport.h" />
+    <ClInclude Include="Serialization\thrift-config.h" />
+    <ClInclude Include="Serialization\Thrift.h" />
+    <ClInclude Include="Serialization\TLogging.h" />
+    <ClInclude Include="Serialization\TOutput.h" />
+    <ClInclude Include="Serialization\TProtocol.h" />
+    <ClInclude Include="Serialization\TProtocolException.h" />
+    <ClInclude Include="Serialization\TSimpleFileTransport.h" />
+    <ClInclude Include="Serialization\TTransport.h" />
+    <ClInclude Include="Serialization\TTransportException.h" />
+    <ClInclude Include="Serialization\TVirtualProtocol.h" />
+    <ClInclude Include="Serialization\TVirtualTransport.h" />
+    <ClInclude Include="Serialization\windows\GetTimeOfDay.h" />
     <ClInclude Include="Utils.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
@@ -148,6 +163,13 @@
     <ClCompile Include="MinibatchSource.cpp" />
     <ClCompile Include="NDArrayView.cpp" />
     <ClCompile Include="NDMask.cpp" />
+    <ClCompile Include="Serialization\TBinaryProtocol.tcc" />
+    <ClCompile Include="Serialization\TFDTransport.cpp" />
+    <ClCompile Include="Serialization\TOutput.cpp" />
+    <ClCompile Include="Serialization\TProtocol.cpp" />
+    <ClCompile Include="Serialization\TSimpleFileTransport.cpp" />
+    <ClCompile Include="Serialization\TTransportException.cpp" />
+    <ClCompile Include="Serialization\windows\GetTimeOfDay.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader>Create</PrecompiledHeader>
     </ClCompile>
