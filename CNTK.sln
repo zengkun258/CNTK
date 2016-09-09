@@ -1259,6 +1259,7 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CPPEvalClientTest", "Tests\
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CSEvalClientTest", "Tests\EndToEndTests\EvalClientTests\CSEvalClientTest\CSEvalClientTest.csproj", "{1C6E6C53-1AA7-4B69-913E-B97BB5A872CF}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CPPEvalExtendedClient", "Examples\Evaluation\CPPEvalExtendedClient\CPPEvalExtendedClient.vcxproj", "{04018EB9-D5EA-42ED-B6C4-D438B1A61F3F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -1546,6 +1547,14 @@ Global
 		{1C6E6C53-1AA7-4B69-913E-B97BB5A872CF}.Release_CpuOnly|x64.Build.0 = Release_CpuOnly|x64
 		{1C6E6C53-1AA7-4B69-913E-B97BB5A872CF}.Release|x64.ActiveCfg = Release|x64
 		{1C6E6C53-1AA7-4B69-913E-B97BB5A872CF}.Release|x64.Build.0 = Release|x64
+		{04018EB9-D5EA-42ED-B6C4-D438B1A61F3F}.Debug_CpuOnly|x64.ActiveCfg = Debug_CpuOnly|x64
+		{04018EB9-D5EA-42ED-B6C4-D438B1A61F3F}.Debug_CpuOnly|x64.Build.0 = Debug_CpuOnly|x64
+		{04018EB9-D5EA-42ED-B6C4-D438B1A61F3F}.Debug|x64.ActiveCfg = Debug|x64
+		{04018EB9-D5EA-42ED-B6C4-D438B1A61F3F}.Debug|x64.Build.0 = Debug|x64
+		{04018EB9-D5EA-42ED-B6C4-D438B1A61F3F}.Release_CpuOnly|x64.ActiveCfg = Release_CpuOnly|x64
+		{04018EB9-D5EA-42ED-B6C4-D438B1A61F3F}.Release_CpuOnly|x64.Build.0 = Release_CpuOnly|x64
+		{04018EB9-D5EA-42ED-B6C4-D438B1A61F3F}.Release|x64.ActiveCfg = Release|x64
+		{04018EB9-D5EA-42ED-B6C4-D438B1A61F3F}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -1719,5 +1728,6 @@ Global
 		{05E45AF7-C069-4057-BC16-0A532D068CE4} = {6E565B48-1923-49CE-9787-9BBB9D96F4C5}
 		{CCC07E8E-F33A-4AF7-9F60-93E2AA61C75E} = {05E45AF7-C069-4057-BC16-0A532D068CE4}
 		{1C6E6C53-1AA7-4B69-913E-B97BB5A872CF} = {05E45AF7-C069-4057-BC16-0A532D068CE4}
+		{04018EB9-D5EA-42ED-B6C4-D438B1A61F3F} = {3385EBEA-5F97-4B2B-9F30-0E6D7F91B9CA}
 	EndGlobalSection
 EndGlobal
