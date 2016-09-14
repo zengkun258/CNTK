@@ -74,6 +74,8 @@ private:
     mutable size_t m_numTimesMatrixTypeChanged;
     mutable int m_devicesTransferedTo[2]; // TODO: what is this for? Seems only diagnostics
 
+    // To enable cachedMatrixBuffer or not. If setting to true, 
+    // the Resize of Matrix will replace by CachedResize, for now, it just work for GPU
     static bool m_useCachedMatrixBuffer;
 
     // Moves matrix from device id_from to device with id_to. This method doesn't change preferred device Id

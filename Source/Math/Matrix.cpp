@@ -155,6 +155,8 @@ MatrixBase::~MatrixBase() { }
 //            { Cpu code },
 //            { GPU code },
 //            ...
+
+// By default, the CachedMatrixBuffer is disable
 template <class ElemType>
 bool Matrix<ElemType>::m_useCachedMatrixBuffer = false;
 
@@ -1588,9 +1590,9 @@ void Matrix<ElemType>::Reshape(const size_t numRows, const size_t numCols)
 template <class ElemType>
 void Matrix<ElemType>::Resize(const size_t numRows, const size_t numCols, const size_t numNZElemToReserve /*=0*/, bool growOnly /*=true*/)
 {
+    // To determine whether uses cachedResize or not
     if (GetUseCachedMatrixBuffer())
     {
-        // TODO: should this function test whether the size is changing, and skip if it isn't? We have at least one explicit test for this code calling this (recurrent node)
         DISPATCH_MATRIX_ON_FLAG_USEBOTH_4BOTH(this,
             { m_CPUMatrix->Resize(numRows, numCols, growOnly); },
             { m_GPUMatrix->CachedResize(numRows, numCols, false/*growOnly*/); },
@@ -1599,6 +1601,7 @@ void Matrix<ElemType>::Resize(const size_t numRows, const size_t numCols, const 
     }
     else
     {
+        // TODO: should this function test whether the size is changing, and skip if it isn't? We have at least one explicit test for this code calling this (recurrent node)
         DISPATCH_MATRIX_ON_FLAG_USEBOTH_4BOTH(this,
             { m_CPUMatrix->Resize(numRows, numCols, growOnly); },
             { m_GPUMatrix->Resize(numRows, numCols, growOnly); },

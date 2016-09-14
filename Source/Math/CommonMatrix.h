@@ -40,7 +40,7 @@ typedef unsigned char byte;
 #define GPUSPARSE_INDEX_TYPE int // cuSparse only supports int array indexes
 #define CPUSPARSE_INDEX_TYPE int // to be consistent with cuSparse but limited the possible size of the matrix.
 
-#define MEM_MAX_LIMIT_TIMES 2
+#define MEM_MAX_LIMIT_TIMES 2 // The maximum times allowed a cached memory block allocated to a request
 
 namespace Microsoft { namespace MSR { namespace CNTK {
 
@@ -62,6 +62,8 @@ public:
     template <typename AllocatedElemType>
     static void Free(int deviceId, AllocatedElemType* bufferPtr, bool ignoreCUDARetCode = false);
 
+    // Let it be public method, the memory manager could check the totoal free memory and decide whether to physically
+    // release all the cached memory.
     static std::pair<size_t, size_t> GetFreeAndTotalMemoryInMBs(int deviceId);
 
 private:
@@ -209,6 +211,21 @@ enum MatrixFlags
 
 // -----------------------------------------------------------------------
 // BufferManager -- to controal all buffer allocation
+// Why it be here?
+// The best way to save memory is to release the memory no-longer used in future. However, 
+// repeatly request and release memory will cost times extra training time. The memory manager 
+// is a tradeoff. We can do release the memory immediately, however, we just put them to a pool.
+// While the request is coming, if the condition allows, just picking the memory from the pool. 
+// In practice, it will save another 30% memory based on sharedNodeMatrices
+// What is the mechianism?
+// A singleton is used here to make sure the buffer manager is unique.
+// Four methods are provided here:
+// RequestBuffer: request a memory block, if the manager finds a proper block in pool, it will 
+// give the handle of the memory. Otherwise, physically resquest a new memory.
+// LogicalReleaseBuffer: release a buffer into the pool
+// PhysicalReleaseBuffer: call the free function and release the memory physically
+// PhysicalReleaseAllBuffer: in some special case, we want to clear the memory in pool, this 
+// method will force realsing all the memory managed by manager
 // -----------------------------------------------------------------------
 class BufferManager
 {

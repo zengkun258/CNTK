@@ -66,6 +66,8 @@
 // node output value matrices. This will go away when the
 // sharing is ready to be enabled by default
 bool g_shareNodeValueMatrices = false;
+// TODO: The keywork to enable memory manager. And hope it will
+// be the default ability someone and this keyword go away.
 bool g_hyperCompressMemory = false;
 
 using namespace std;
@@ -221,6 +223,7 @@ void DoCommands(const ConfigParameters& config, const shared_ptr<MPIWrapper>& mp
             ProgressTracing::SetStepOffset(fullEpochsOffset); // this is the epoch number that SGD will log relative to
         }
 
+        // The hyperCompressMemory mechianism is built on CachedResize of Matrix.cpp, a static function to active it
         Matrix<ElemType>::SetUseCachedMatrixBuffer(g_hyperCompressMemory);
 
         // determine the action to perform, and do it

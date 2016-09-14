@@ -765,6 +765,10 @@ public:
 
     void SetOutputNeededDuringBackprop(bool f) { m_outputNeededDuringBackprop = f; }
     bool IsOutputNeededDuringBackprop() const { return !g_shareNodeValueMatrices || m_outputNeededDuringBackprop; }
+
+    // To check whether the hyperCompressMemory is enable. If enable, meaning the Resize function has been re-implemented to CachedResize
+    // the cost of frequently request and release memory is nearly no extra payment, since all the operation is logical and
+    // controlled by memory manager
     bool IsHyperCompressMemory() const { return g_hyperCompressMemory; }
 
     // -----------------------------------------------------------------------
@@ -1400,12 +1404,17 @@ public:
         // tracing
         Trace();
 
-        for (auto& input : GetInputs()) 
+        // Any memory not needed could resize to zero immediately when HyperCompressMemory active. Since the memory won't really release,
+        // all these memory blocks are gathered into a memory pool. When the next request coming, the best fitting block will be chosen.
+        if (IsHyperCompressMemory()) 
         {
-            if (!input->IsOutputNeededDuringBackprop() && IsHyperCompressMemory()) 
+            for (auto& input : GetInputs())
             {
-                shared_ptr<Matrix<ElemType>> inputMatrix = static_pointer_cast<Matrix<ElemType>>(input->ValuePtr());
-                inputMatrix->Resize(0, 0);
+                if (!input->IsOutputNeededDuringBackprop())
+                {
+                    shared_ptr<Matrix<ElemType>> inputMatrix = static_pointer_cast<Matrix<ElemType>>(input->ValuePtr());
+                    inputMatrix->Resize(0, 0);
+                }
             }
         }
     }
@@ -1434,6 +1443,7 @@ public:
         }
 #endif
 #endif
+        // We could release the gradient of value sharable nodes and all no-longer used memory generated in forward.
         if (IsValueSharable() && IsHyperCompressMemory())
         {
             if (GradientPtr()) Gradient().Resize(0, 0);
