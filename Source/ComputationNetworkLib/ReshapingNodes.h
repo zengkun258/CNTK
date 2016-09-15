@@ -424,106 +424,23 @@ class CropNode : public ComputationNode<ElemType>, public NumInputs<2>
     static const std::wstring TypeName() { return L"Crop"; }
 
 public:
-    CropNode(DEVICEID_TYPE deviceId, const std::wstring& name)
-        : CropNode(std::numeric_limits<size_t>::max(), std::numeric_limits<size_t>::max(), deviceId, name)
-    {}
+    CropNode(DEVICEID_TYPE deviceId, const std::wstring& name);
 
-    CropNode(size_t offsetX, size_t offsetY, DEVICEID_TYPE deviceId, const std::wstring& name)
-        : Base(deviceId, name), m_xOffset(offsetX), m_yOffset(offsetY)
-    {}
+    CropNode(size_t offsetX, size_t offsetY, DEVICEID_TYPE deviceId, const std::wstring& name);
 
-    CropNode(const ScriptableObjects::IConfigRecordPtr configp)
-        : CropNode(configp->Get(L"xOffset"), configp->Get(L"yOffset"), configp->Get(L"deviceId"), L"<placeholder>")
-    {
-        AttachInputsFromConfig(configp, this->GetExpectedNumInputs());
-    }
+    CropNode(const ScriptableObjects::IConfigRecordPtr configp);
 
-    void /*ComputationNodeBase::*/ Validate(bool isFinalValidationPass) override
-    {
-        Base::Validate(isFinalValidationPass);
-        InferMBLayoutFromInputsForStandardCase(isFinalValidationPass);
+    void /*ComputationNodeBase::*/ Validate(bool isFinalValidationPass) override;
 
-        // Here we need to determine output dimensions which are same as dimensions of second input.
-        TensorShape inputShape0 = Input(0)->GetSampleLayout();
-        TensorShape inputShape1 = Input(1)->GetSampleLayout();
+    virtual void /*ComputationNode::*/ ForwardProp(const FrameRange& /*fr*/) override;
 
-        SmallVector<size_t> inDims  = inputShape0.GetDims();
-        SmallVector<size_t> outDims = inputShape1.GetDims();
+    virtual void /*ComputationNode::*/ BackpropTo(const size_t inputIndex, const FrameRange& /*fr*/) override;
 
-        // We assume we have at least two dimensions (first two are to be cropped).
-        if (outDims.size() < 2)
-            RuntimeError("Crop input samples must have at least two dimensions.");
+    void Save(File& fstream) const override;
 
-        // Cropped input must be large enough to allow cropping at given offset.
-        if (inDims[0] < outDims[0] + m_xOffset)
-            RuntimeError("Input is small to be cropped along x dimension in crop node.");
+    void Load(File& fstream, size_t modelVersion) override;
 
-        if (inDims[1] < outDims[1] + m_yOffset)
-            RuntimeError("Input is small to be cropped along y dimension in crop node.");
-
-        // Set output dimensions.
-        SetDims(TensorShape(outDims), HasMBLayout());
-    }
-
-    virtual void /*ComputationNode::*/ ForwardProp(const FrameRange& /*fr*/) override
-    {
-        // Our offsets must be initialized here.
-        if (m_xOffset == numeric_limits<size_t>::max() || m_yOffset == numeric_limits<size_t>::max())
-            RuntimeError("Automatic offsets calculation for crop is not implemented.");
-
-        // Retrieve input and output views for the values. Input and output views are tensor views
-        // that define parts of first input and output that we operate on (we copy input from input view
-        // to output).
-        CroppedIOViews ioViews = CreateIOViews(&ComputationNode<ElemType>::ValuePtr);
-
-        // Copy values from cropped input to output.
-        ioViews.outputView.AssignCopyOf(ioViews.inputViewCropped);
-    }
-
-    virtual void /*ComputationNode::*/ BackpropTo(const size_t inputIndex, const FrameRange& /*fr*/) override
-    {
-        // We propagate gradients just to the cropped input.
-        if (inputIndex == 0)
-        {
-            // Reset input gradients to ensure that non-cropped parts do not affect backprop.
-            Input(0)->Gradient().SetValue(0);
-
-            // Retrieve input and output views for the gradients. Input and output views are tensor views
-            // that define parts of first input and output that we operate on (we copy gradients from output view
-            // to input view).
-            CroppedIOViews ioViews = CreateIOViews(&ComputationNode<ElemType>::GradientPtr);
-
-            // Copy gradients from output to cropped input.
-            ioViews.inputViewCropped.AddCopyOf(ioViews.outputView);
-        }
-    }
-
-    void Save(File& fstream) const override
-    {
-        Base::Save(fstream);
-
-        fstream << m_xOffset;
-        fstream << m_yOffset;
-    }
-
-    void Load(File& fstream, size_t modelVersion) override
-    {
-        Base::Load(fstream, modelVersion);
-
-        fstream >> m_xOffset;
-        fstream >> m_yOffset;
-    }
-
-    void CopyTo(ComputationNodeBasePtr nodeP, const std::wstring& newName, const CopyNodeFlags flags) const override
-    {
-        Base::CopyTo(nodeP, newName, flags);
-        if (flags & CopyNodeFlags::copyNodeValue)
-        {
-            auto node = dynamic_pointer_cast<CropNode<ElemType>>(nodeP);
-            node->m_xOffset = m_xOffset;
-            node->m_yOffset = m_yOffset;
-        }
-    }
+    void CopyTo(ComputationNodeBasePtr nodeP, const std::wstring& newName, const CopyNodeFlags flags) const override;
 
 private:
     // Declaration of matrix getting method to unify accessing values and gradients.
@@ -546,26 +463,7 @@ private:
     // Creates input and output views (TensorViews that define parts of input and output we work with). MatrixGetter is
     // the pointer to method that returns appropriate matrix (values in forward or gradients in backward). Using
     // MatrixGetter we can reuse code without copy-pasting.
-    CroppedIOViews CreateIOViews(MatrixGetter matrixGetter)
-    {
-        // Get the shapes of the inputs.
-        TensorShape inputShape0 = Input(0)->GetTensorShape(Input(0)->GetSampleLayout().GetRank());
-        TensorShape inputShape1 = Input(1)->GetTensorShape(Input(1)->GetSampleLayout().GetRank());
-
-        // Calculate cropped shape of the input.
-        TensorShape inputShapeCropped = inputShape0;
-        inputShapeCropped.NarrowTo(0, m_xOffset, m_xOffset + inputShape1.GetDim(0));
-        inputShapeCropped.NarrowTo(1, m_yOffset, m_yOffset + inputShape1.GetDim(1));
-
-        // Get output shape.
-        TensorShape outputShape = GetTensorShape(GetSampleLayout().GetRank());
-        // Cropped input and output dimensions must be same.
-        if (inputShapeCropped.GetDims() != outputShape.GetDims())
-            RuntimeError("Cropped input and output do not match in crop node.");
-
-        // Create proper views using calculated shapes.
-        return CroppedIOViews(this, matrixGetter, inputShapeCropped, outputShape);
-    }
+    CroppedIOViews CreateIOViews(MatrixGetter matrixGetter);
 
 protected:
     // Offset along x axis.
@@ -573,9 +471,6 @@ protected:
     // Offset along y axis.
     size_t m_yOffset;
 };
-
-template class CropNode<float>;
-template class CropNode<double>;
 
 // -----------------------------------------------------------------------
 // RowStack (input0, input1, ...)

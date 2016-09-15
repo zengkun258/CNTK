@@ -471,4 +471,145 @@ template <class ElemType>
 template class ScatterPackedNode<float>;
 template class ScatterPackedNode<double>;
 
+// -----------------------------------------------------------------------
+// // CropNode (input1, input2, offsetX, offsetY) -- crop operation
+// -----------------------------------------------------------------------
+
+template <class ElemType>
+CropNode<ElemType>::CropNode(DEVICEID_TYPE deviceId, const std::wstring& name)
+    : CropNode(std::numeric_limits<size_t>::max(), std::numeric_limits<size_t>::max(), deviceId, name)
+{
+}
+
+template <class ElemType>
+CropNode<ElemType>::CropNode(size_t offsetX, size_t offsetY, DEVICEID_TYPE deviceId, const std::wstring& name)
+    : Base(deviceId, name), m_xOffset(offsetX), m_yOffset(offsetY)
+{
+}
+
+template <class ElemType>
+CropNode<ElemType>::CropNode(const ScriptableObjects::IConfigRecordPtr configp)
+    : CropNode(configp->Get(L"xOffset"), configp->Get(L"yOffset"), configp->Get(L"deviceId"), L"<placeholder>")
+{
+    AttachInputsFromConfig(configp, this->GetExpectedNumInputs());
+}
+
+template <class ElemType>
+void CropNode<ElemType>::Validate(bool isFinalValidationPass)
+{
+    Base::Validate(isFinalValidationPass);
+    InferMBLayoutFromInputsForStandardCase(isFinalValidationPass);
+
+    // Here we need to determine output dimensions which are same as dimensions of second input.
+    TensorShape inputShape0 = Input(0)->GetSampleLayout();
+    TensorShape inputShape1 = Input(1)->GetSampleLayout();
+
+    SmallVector<size_t> inDims = inputShape0.GetDims();
+    SmallVector<size_t> outDims = inputShape1.GetDims();
+
+    // We assume we have at least two dimensions (first two are to be cropped).
+    if (outDims.size() < 2)
+        RuntimeError("Crop input samples must have at least two dimensions.");
+
+    // Cropped input must be large enough to allow cropping at given offset.
+    if (inDims[0] < outDims[0] + m_xOffset)
+        RuntimeError("Input is small to be cropped along x dimension in crop node.");
+
+    if (inDims[1] < outDims[1] + m_yOffset)
+        RuntimeError("Input is small to be cropped along y dimension in crop node.");
+
+    // Set output dimensions.
+    SetDims(TensorShape(outDims), HasMBLayout());
+}
+
+template <class ElemType>
+void CropNode<ElemType>::ForwardProp(const FrameRange& /*fr*/)
+{
+    // Our offsets must be initialized here.
+    if (m_xOffset == numeric_limits<size_t>::max() || m_yOffset == numeric_limits<size_t>::max())
+        RuntimeError("Automatic offsets calculation for crop is not implemented.");
+
+    // Retrieve input and output views for the values. Input and output views are tensor views
+    // that define parts of first input and output that we operate on (we copy input from input view
+    // to output).
+    CroppedIOViews ioViews = CreateIOViews(&ComputationNode<ElemType>::ValuePtr);
+
+    // Copy values from cropped input to output.
+    ioViews.outputView.AssignCopyOf(ioViews.inputViewCropped);
+}
+
+template <class ElemType>
+void CropNode<ElemType>::BackpropTo(const size_t inputIndex, const FrameRange& /*fr*/)
+{
+    // We propagate gradients just to the cropped input.
+    if (inputIndex == 0)
+    {
+        // Reset input gradients to ensure that non-cropped parts do not affect backprop.
+        Input(0)->Gradient().SetValue(0);
+
+        // Retrieve input and output views for the gradients. Input and output views are tensor views
+        // that define parts of first input and output that we operate on (we copy gradients from output view
+        // to input view).
+        CroppedIOViews ioViews = CreateIOViews(&ComputationNode<ElemType>::GradientPtr);
+
+        // Copy gradients from output to cropped input.
+        ioViews.inputViewCropped.AddCopyOf(ioViews.outputView);
+    }
+}
+
+template <class ElemType>
+void CropNode<ElemType>::Save(File& fstream) const
+{
+    Base::Save(fstream);
+
+    fstream << m_xOffset;
+    fstream << m_yOffset;
+}
+
+template <class ElemType>
+void CropNode<ElemType>::Load(File& fstream, size_t modelVersion)
+{
+    Base::Load(fstream, modelVersion);
+
+    fstream >> m_xOffset;
+    fstream >> m_yOffset;
+}
+
+template <class ElemType>
+void CropNode<ElemType>::CopyTo(ComputationNodeBasePtr nodeP, const std::wstring& newName, const CopyNodeFlags flags) const
+{
+    Base::CopyTo(nodeP, newName, flags);
+    if (flags & CopyNodeFlags::copyNodeValue)
+    {
+        auto node = dynamic_pointer_cast<CropNode<ElemType>>(nodeP);
+        node->m_xOffset = m_xOffset;
+        node->m_yOffset = m_yOffset;
+    }
+}
+
+template <class ElemType>
+typename CropNode<ElemType>::CroppedIOViews CropNode<ElemType>::CreateIOViews(MatrixGetter matrixGetter)
+{
+    // Get the shapes of the inputs.
+    TensorShape inputShape0 = Input(0)->GetTensorShape(Input(0)->GetSampleLayout().GetRank());
+    TensorShape inputShape1 = Input(1)->GetTensorShape(Input(1)->GetSampleLayout().GetRank());
+
+    // Calculate cropped shape of the input.
+    TensorShape inputShapeCropped = inputShape0;
+    inputShapeCropped.NarrowTo(0, m_xOffset, m_xOffset + inputShape1.GetDim(0));
+    inputShapeCropped.NarrowTo(1, m_yOffset, m_yOffset + inputShape1.GetDim(1));
+
+    // Get output shape.
+    TensorShape outputShape = GetTensorShape(GetSampleLayout().GetRank());
+    // Cropped input and output dimensions must be same.
+    if (inputShapeCropped.GetDims() != outputShape.GetDims())
+        RuntimeError("Cropped input and output do not match in crop node.");
+
+    // Create proper views using calculated shapes.
+    return CroppedIOViews(this, matrixGetter, inputShapeCropped, outputShape);
+}
+
+template class CropNode<float>;
+template class CropNode<double>;
+
 }}}
