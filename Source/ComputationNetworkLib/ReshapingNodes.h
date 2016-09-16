@@ -416,7 +416,7 @@ template class SliceNode<double>;
 // -----------------------------------------------------------------------
 
 template <class ElemType>
-class CropNode : public ComputationNode<ElemType>, public NumInputs<2>
+class CropNode : public ComputationNode<ElemType>, public NumInputs<2>, public TransformerNode<CropNode<ElemType>>
 {
     typedef ComputationNode<ElemType> Base;
     UsingComputationNodeMembersBoilerplate;
@@ -427,6 +427,8 @@ public:
     CropNode(DEVICEID_TYPE deviceId, const std::wstring& name);
 
     CropNode(size_t offsetX, size_t offsetY, DEVICEID_TYPE deviceId, const std::wstring& name);
+
+    CropNode(const wchar_t* eqNode1, const wchar_t* eqNode2, DEVICEID_TYPE deviceId, const wstring& name);
 
     CropNode(const ScriptableObjects::IConfigRecordPtr configp);
 
@@ -465,11 +467,22 @@ private:
     // MatrixGetter we can reuse code without copy-pasting.
     CroppedIOViews CreateIOViews(MatrixGetter matrixGetter);
 
+    // Performs offsets computation if necessary.
+    void ComputeCropOffsets();
+
+    virtual void /*ITransformerNode::*/ComputeTransforms() override;
+
+    virtual bool /*ITransformerNode::*/SupportsTransformOnInput(int inputIndex) override;
+
 protected:
-    // Offset along x axis.
-    size_t m_xOffset;
+    // Offset along x axis. We need to store offsets as floats for precision if one crop node affects computation of other.
+    float m_xOffset;
     // Offset along y axis.
-    size_t m_yOffset;
+    float m_yOffset;
+    // Equivalence node names (equivalence node are sort of virtual common ancestors).
+    std::wstring m_equivalenceNode1Name;
+    std::wstring m_equivalenceNode2Name;
+
 };
 
 // -----------------------------------------------------------------------

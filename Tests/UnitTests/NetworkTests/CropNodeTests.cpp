@@ -62,27 +62,6 @@ public:
 };
 
 template<class ElemType>
-void CropNodeConstructTestImpl()
-{
-    // Test that offsets cannot be negative.
-    BOOST_REQUIRE_EXCEPTION(
-        make_shared<CropNode<ElemType>>(1, -1, c_deviceId, L"CropNode"),
-        std::runtime_error,
-        [](std::runtime_error const& ex) { return string("Offsets in crop node must be non-negative") == ex.what(); }
-    );
-    BOOST_REQUIRE_EXCEPTION(
-        make_shared<CropNode<ElemType>>(-1, 1, c_deviceId, L"CropNode"),
-        std::runtime_error,
-        [](std::runtime_error const& ex) { return string("Offsets in crop node must be non-negative") == ex.what(); }
-    );
-    BOOST_REQUIRE_EXCEPTION(
-        make_shared<CropNode<ElemType>>(-1, -1, c_deviceId, L"CropNode"),
-        std::runtime_error,
-        [](std::runtime_error const& ex) { return string("Offsets in crop node must be non-negative") == ex.what(); }
-    );
-}
-
-template<class ElemType>
 void CropNodeValidateTestImpl()
 {
     {
@@ -227,12 +206,6 @@ void CropNodeBackwardTestImpl()
 }
 
 BOOST_AUTO_TEST_SUITE(CropNodeTestSuite)
-
-BOOST_AUTO_TEST_CASE(CropNodeInitTest)
-{
-    CropNodeConstructTestImpl<float>();
-    CropNodeConstructTestImpl<double>();
-}
 
 BOOST_AUTO_TEST_CASE(CropNodeValidateTest)
 {

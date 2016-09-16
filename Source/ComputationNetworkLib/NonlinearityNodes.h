@@ -36,7 +36,8 @@ enum GradientOperationType
 };
 
 template <class ElemType, ElementWiseOperator opForward, ElementWiseOperator opBackward, GradientOperationType opType>
-class UnaryElementWiseWithOpCodeNodeBase : public ComputationNode<ElemType>, public NumInputs<1>
+class UnaryElementWiseWithOpCodeNodeBase : public ComputationNode<ElemType>, public NumInputs<1>,
+    public IdentityTransformerNode<UnaryElementWiseWithOpCodeNodeBase<ElemType, opForward, opBackward, opType>>
 {
     typedef ComputationNode<ElemType> Base;
     UsingComputationNodeMembers;
