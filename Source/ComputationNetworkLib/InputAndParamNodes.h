@@ -329,7 +329,7 @@ private:
 // -----------------------------------------------------------------------
 
 template <class ElemType>
-class InputValue : public InputValueBase<ElemType>
+class InputValue : public InputValueBase<ElemType>, public IdentityTransformerNode<InputValue<ElemType>>
 {
     typedef InputValueBase<ElemType> Base; UsingComputationNodeMembersBoilerplate;
     static const std::wstring TypeName() { return L"InputValue"; }

@@ -101,6 +101,7 @@ public:
                                       const size_t windowWidth, const size_t windowHeight, const size_t horizontalSubsample, const size_t verticalSubsample, ImageLayoutKind imageLayoutKind,
                                       const std::wstring nodeName = L"");
     ComputationNodePtr Crop(const ComputationNodePtr input1, const ComputationNodePtr input2, size_t offsetX, size_t offsetY, const std::wstring nodeName = L"");
+    ComputationNodePtr Crop(const ComputationNodePtr input1, const ComputationNodePtr input2, const wchar_t* eqNode1, const wchar_t* eqNode2, const std::wstring nodeName = L"");
 
 #ifdef COMING_SOON
     ComputationNodePtr CRF(const ComputationNodePtr label, const ComputationNodePtr postDepScore, const ComputationNodePtr transition_score, const std::wstring nodeName = L"");
