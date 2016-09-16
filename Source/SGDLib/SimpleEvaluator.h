@@ -187,8 +187,16 @@ public:
                 m_gradHeader->numSamples = actualMBSize;
                 m_gradHeader->numSamplesWithLabel = numSamplesWithLabel;
                 m_gradHeader->criterion = 0.0; // (not used here)
+
                 for (size_t i = 0; i < evalNodes.size(); i++)
-                    m_gradHeader->evalErrors[i] = localEpochEvalErrors.Assign(evalNodes, i, numSamplesWithLabel).GetCriterion(i);
+                {
+                    // Aggregation nodes already contain aggregated error for all samples that passed through network in
+                    // forward pass - for them we use 1 as number of samples to avoid averaging again.
+                    const bool isAggregationNode = evalNodes[i]->HasTag(L"aggregation");
+                    const size_t sampleCount = isAggregationNode ? 1 : numSamplesWithLabel;
+                    m_gradHeader->evalErrors[i] =
+                        localEpochEvalErrors.Assign(evalNodes, i, sampleCount).GetCriterion(i);
+                }
 
                 // TODO: We are reusing the aggregation logic inside SimpleDistGradAggregator, which has a heavy dependency
                 // on the gradient matrix. At some point we should refactor the aggregator class to be able to only calculating
@@ -212,8 +220,20 @@ public:
             {
                 if (actualMBSize != 0)
                 {
-                for (int i = 0; i < evalNodes.size(); i++)
-                    evalResults[i] += localEpochEvalErrors.Assign(evalNodes, i, numSamplesWithLabel).GetCriterion(i);
+                    for (int i = 0; i < evalNodes.size(); i++)
+                    {
+                        // Aggregation nodes already contain aggregated error for all samples that passed through
+                        // network in forward pass. For them we use 1 as number of samples to avoid averaging again.
+                        // Also, we don't accumulate this error in epoch criterion as it has already been accumulated in
+                        // these nodes.
+                        const bool isAggregationNode = evalNodes[i]->HasTag(L"aggregation");
+                        const size_t sampleCount = isAggregationNode ? 1 : numSamplesWithLabel;
+                        localEpochEvalErrors.Assign(evalNodes, i, sampleCount);
+                        if (isAggregationNode)
+                            evalResults[i] = localEpochEvalErrors.GetCriterion(i);
+                        else
+                            evalResults[i] += localEpochEvalErrors.GetCriterion(i);
+                    }
                 }
             }
 
@@ -229,7 +249,17 @@ public:
                     DisplayEvalStatistics(numMBsRunLastLogged + 1, numMBsRun, numSamplesLastLogged, evalNodes, evalResults, evalResultsLastLogged);
 
                     for (int i = 0; i < evalResults.size(); i++)
-                        evalResultsLastLogged[i] = evalResults[i];
+                    {
+                        const bool isAggregationNode = evalNodes[i]->HasTag(L"aggregation");
+                        if (isAggregationNode)
+                        {
+                            // For aggregation nodes we report aggregated error for all samples that passed through
+                            // network so far, instead of reporting per minibatch error.
+                            evalResultsLastLogged[i] = EpochCriterion(0);
+                        }
+                        else
+                            evalResultsLastLogged[i] = evalResults[i];
+                    }
                     numSamplesLastLogged = 0;
                     numMBsRunLastLogged = numMBsRun;
                 }

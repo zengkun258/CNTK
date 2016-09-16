@@ -540,22 +540,27 @@ public:
     const std::vector<ComputationNodeBasePtr>& RootNodes()           const { return m_allRoots; }
 
     // these are specified as such by the user
-    const std::vector<ComputationNodeBasePtr>& FeatureNodes()        const { return m_featureNodes   ; }
-    const std::vector<ComputationNodeBasePtr>& LabelNodes()          const { return m_labelNodes     ; }
-    const std::vector<ComputationNodeBasePtr>& FinalCriterionNodes() const { return m_criterionNodes ; }
-    const std::vector<ComputationNodeBasePtr>& EvaluationNodes()     const { return m_evaluationNodes; }
-    const std::vector<ComputationNodeBasePtr>& OutputNodes()         const { return m_outputNodes    ; }
+    const std::vector<ComputationNodeBasePtr>& FeatureNodes()        const { return m_featureNodes    ; }
+    const std::vector<ComputationNodeBasePtr>& LabelNodes()          const { return m_labelNodes      ; }
+    const std::vector<ComputationNodeBasePtr>& FinalCriterionNodes() const { return m_criterionNodes  ; }
+    const std::vector<ComputationNodeBasePtr>& EvaluationNodes()     const { return m_evaluationNodes ; }
+    const std::vector<ComputationNodeBasePtr>& OutputNodes()         const { return m_outputNodes     ; }
+    const std::vector<ComputationNodeBasePtr>& AggregationNodes()    const { return m_aggregationNodes; }
 
 private:
     // determine the node-group array by the group tag
     std::vector<ComputationNodeBasePtr>& GetNodeGroup(const std::wstring& groupTag)
     {
-        if      (groupTag == L"feature"   ) return m_featureNodes;
-        else if (groupTag == L"label"     ) return m_labelNodes;
-        else if (groupTag == L"criterion" ) return m_criterionNodes;
-        else if (groupTag == L"evaluation") return m_evaluationNodes;
-        else if (groupTag == L"output"    ) return m_outputNodes;
-        else InvalidArgument("Invalid group tag '%ls', must be one of 'feature', 'label', 'criterion', 'evaluation', 'output'.", groupTag.c_str());
+        if      (groupTag == L"feature"    ) return m_featureNodes;
+        else if (groupTag == L"label"      ) return m_labelNodes;
+        else if (groupTag == L"criterion"  ) return m_criterionNodes;
+        else if (groupTag == L"evaluation" ) return m_evaluationNodes;
+        else if (groupTag == L"output"     ) return m_outputNodes;
+        else if (groupTag == L"aggregation") return m_aggregationNodes;
+        else
+            InvalidArgument("Invalid group tag '%ls', must be one of 'feature', 'label', 'criterion', 'evaluation', "
+                            "'output', 'aggregation'.",
+                            groupTag.c_str());
     }
 
 public:
@@ -1084,6 +1089,7 @@ private:
     std::vector<ComputationNodeBasePtr> m_criterionNodes;  // tag="criterion"
     std::vector<ComputationNodeBasePtr> m_evaluationNodes; // tag="evaluation"
     std::vector<ComputationNodeBasePtr> m_outputNodes;     // tag="output"
+    std::vector<ComputationNodeBasePtr> m_aggregationNodes;// tag="aggregation"
     vector<std::vector<ComputationNodeBasePtr>*> GetAllNodeGroups() // get all groups to allow to iterate over all of them ...continue
     {
         return vector<std::vector<ComputationNodeBasePtr>*>{&m_featureNodes, &m_labelNodes, &m_criterionNodes, &m_evaluationNodes, &m_outputNodes};

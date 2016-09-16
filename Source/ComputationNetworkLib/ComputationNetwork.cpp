@@ -181,6 +181,12 @@ void ComputationNetwork::SaveToFileImpl(const wstring& fileName, const FileOptio
         fstream << m_evaluationNodes[i]->NodeName();
     fstream.PutMarker(FileMarker::fileMarkerEndSection, L"EEvalNodes");
 
+    fstream.PutMarker(FileMarker::fileMarkerBeginSection, L"BAggregationNodes");
+    fstream << m_aggregationNodes.size();
+    for (size_t i = 0; i < m_aggregationNodes.size(); i++)
+        fstream << m_aggregationNodes[i]->NodeName();
+    fstream.PutMarker(FileMarker::fileMarkerEndSection, L"EAggregationNodes");
+
     fstream.PutMarker(FileMarker::fileMarkerBeginSection, L"BOutputNodes");
     fstream << m_outputNodes.size();
     for (size_t i = 0; i < m_outputNodes.size(); i++)
@@ -362,6 +368,17 @@ void ComputationNetwork::Read(const wstring& fileName)
                 AddToNodeGroup(L"evaluation", GetNodeFromName(nodeName));
             }
             fstream.GetMarker(FileMarker::fileMarkerEndSection, L"EEvalNodes");
+        }
+
+        if (fstream.TryGetMarker(FileMarker::fileMarkerBeginSection, L"BAggregationNodes"))
+        {
+            fstream >> num;
+            for (size_t i = 0; i < num; i++)
+            {
+                fstream >> nodeName;
+                AddToNodeGroup(L"aggregation", GetNodeFromName(nodeName));
+            }
+            fstream.GetMarker(FileMarker::fileMarkerEndSection, L"EAggregationNodes");
         }
 
         if (fstream.TryGetMarker(FileMarker::fileMarkerBeginSection, L"BOutputNodes"))

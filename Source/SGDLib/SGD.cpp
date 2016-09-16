@@ -1062,7 +1062,19 @@ size_t SGD<ElemType>::TrainOneEpoch(ComputationNetworkPtr net,
             // criteria are in Value()(0,0), we accumulate into another 1x1 Matrix (to avoid having to pull the values off the GPU)
             localEpochCriterion.Add(criterionNodes, 0, numSamplesWithLabelOfNetwork);
             for (size_t i = 0; i < evaluationNodes.size(); i++)
-                localEpochEvalErrors.Add(evaluationNodes, i, numSamplesWithLabelOfNetwork);
+            {
+                const bool isAggregationNode = evaluationNodes[i]->HasTag(L"aggregation");
+                if (isAggregationNode)
+                {
+                    // Aggregation nodes already contain aggregated error for all samples that passed through
+                    // network in forward pass. For them we use 1 as number of samples to avoid averaging again.
+                    // Also, we don't accumulate this error in epoch criterion as it has already been accumulated in
+                    // these nodes.
+                    localEpochEvalErrors.Assign(evaluationNodes, i, 1);
+                }
+                else
+                    localEpochEvalErrors.Add(evaluationNodes, i, numSamplesWithLabelOfNetwork);
+            }
         }
         else
         {
@@ -1094,7 +1106,13 @@ size_t SGD<ElemType>::TrainOneEpoch(ComputationNetworkPtr net,
             // hoist the criterion into CPU space for all-reduce
             localEpochCriterion.Assign(criterionNodes, 0, numSamplesWithLabelOfNetwork);
             for (size_t i = 0; i < evaluationNodes.size(); i++)
-                localEpochEvalErrors.Assign(evaluationNodes, i, numSamplesWithLabelOfNetwork);
+            {
+                const bool isAggregationNode = evaluationNodes[i]->HasTag(L"aggregation");
+                // Aggregation nodes already contain aggregated error for all samples that passed through
+                // network in forward pass. For them we use 1 as number of samples to avoid averaging again.
+                const size_t samplesCount = isAggregationNode ? 1 : numSamplesWithLabelOfNetwork;
+                localEpochEvalErrors.Assign(evaluationNodes, i, samplesCount);
+            }
 
             // copy all values to be aggregated into the header
             m_gradHeader->numSamples = aggregateNumSamples;
@@ -1251,7 +1269,22 @@ size_t SGD<ElemType>::TrainOneEpoch(ComputationNetworkPtr net,
                 fprintf(stderr, "]: ");
                 epochCriterionSinceLastLogged.LogCriterion(criterionNodes[0]->NodeName());
                 for (size_t i = 0; i < epochEvalErrors.size(); i++)
-                    (epochEvalErrors[i] - epochEvalErrorsLastLogged[i]).LogCriterion(evaluationNodes[i]->NodeName());
+                {
+                    const std::wstring& nodeName = evaluationNodes[i]->NodeName();
+                    const bool isAggregationNode = evaluationNodes[i]->HasTag(L"aggregation");
+                    if (isAggregationNode)
+                    {
+                        // For aggregation nodes, we don't report per minibatch error. These nodes calculate
+                        // aggregated error for all samples that passed through network, instead of calculating per
+                        // sample error. Aggregated error for all samples will be reported for these nodes.
+                        epochEvalErrors[i].LogCriterion(nodeName);
+                    }
+                    else
+                    {
+                        // Report per minibatch error.
+                        (epochEvalErrors[i] - epochEvalErrorsLastLogged[i]).LogCriterion(nodeName);
+                    }
+                }
 
                 fprintf(stderr, ("time = " + GeneratePaddedFloatOrExpFormat(0, 4, totalTimeInMBs) + "s; samplesPerSecond = %.1f\n").c_str(),
                         totalTimeInMBs, trainSamplesSinceLastLogged / totalTimeInMBs);
@@ -1271,6 +1304,16 @@ size_t SGD<ElemType>::TrainOneEpoch(ComputationNetworkPtr net,
             epochCriterionLastLogged  = epochCriterion;
             epochEvalErrorsLastLogged = epochEvalErrors;
             numMBsRunSinceLastLogged = numMBsRun;
+            for (size_t i = 0; i < epochEvalErrors.size(); i++)
+            {
+                const bool isAggregationNode = evaluationNodes[i]->HasTag(L"aggregation");
+                if (isAggregationNode)
+                {
+                    // For aggregation nodes, we aggregated error for all samples that passed through network so far,
+                    // instead of per minibatch error. So, we reset last logged error here.
+                    epochEvalErrorsLastLogged[i] = EpochCriterion(0);
+                }
+            }
 
             totalTimeInMBs = 0;
         }

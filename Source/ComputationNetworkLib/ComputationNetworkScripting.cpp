@@ -37,7 +37,7 @@ using namespace Microsoft::MSR::ScriptableObjects;
 // construction from config
 // ===================================================================
 
-const static set<wstring> nodeGroupNames{ L"feature", L"label", L"criterion", L"evaluation", L"output" };
+const static set<wstring> nodeGroupNames{ L"feature", L"label", L"criterion", L"evaluation", L"output", L"aggregation" };
 
 // construct a ComputationNetwork from a ConfigRecord
 ComputationNetwork::ComputationNetwork(const IConfigRecordPtr configp) :
