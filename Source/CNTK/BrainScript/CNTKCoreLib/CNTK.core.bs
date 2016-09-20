@@ -463,10 +463,10 @@ CNTK2 = [
         else if topN != 1 then Fail ("ClassificationError() along a specific axis does not support topN.")
         else {
             axMax     = ReduceMax (outVectorSequence, axis=axis)    # max value along competition axis
-            pred      = Equal (outVectorSequence, axMax)            # 1 for all values that are max
-            wrongPred = NotEqual (labelSequence, pred)              # look up all wrong predictions {label index}
+            pred      = outVectorSequence == axMax                  # 1 for all values that are max
+            wrongPred = labelSequence != pred                       # look up all wrong predictions {label index}
             axErr     = ReduceSum (wrongPred, axis=axis)            # sum up wrong predictions  along competition axis
-            capErr    = GreaterEqual (axErr, Constant(1))           # only count maximally one error per prediction
+            capErr    = axErr >= 1                                  # only count maximally one error per prediction
             err       = ReduceMean (capErr, tag=tag)                # average into a single number per sample
         }.err
     ErrorPrediction = ClassificationError  # legacy
