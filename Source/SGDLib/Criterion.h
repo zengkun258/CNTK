@@ -149,6 +149,15 @@ public:
     {
         if (numSamplesInMinibatch == 0) // empty MB: node is invalid, MBLayout must not be looked at
             return 0;
+        else if (node->HasTag(L"aggregation"))
+        {
+            // Aggregation nodes already contain aggregated error for all samples that passed through network in forward
+            // pass instead of per sample error (as such they don't have minibatch layout).
+            // For them we use 1 as number of samples to avoid averaging again.
+            if (node->HasMBLayout())
+                LogicError("Node %ls is marked as aggregation, but has minibatch layout.", node->GetName().c_str());
+            return 1;
+        }
         else if (node->HasMBLayout())
             return node->GetMBLayout()->GetActualNumSamples();
         else

@@ -1066,11 +1066,10 @@ size_t SGD<ElemType>::TrainOneEpoch(ComputationNetworkPtr net,
                 const bool isAggregationNode = evaluationNodes[i]->HasTag(L"aggregation");
                 if (isAggregationNode)
                 {
-                    // Aggregation nodes already contain aggregated error for all samples that passed through
-                    // network in forward pass. For them we use 1 as number of samples to avoid averaging again.
-                    // Also, we don't accumulate this error in epoch criterion as it has already been accumulated in
-                    // these nodes.
-                    localEpochEvalErrors.Assign(evaluationNodes, i, 1);
+                    // Aggregation nodes already contain aggregated error for all samples that passed through network in
+                    // in forward pass. We don't accumulate this error in epoch criterion as it has already been
+                    // accumulated in these nodes.
+                    localEpochEvalErrors.Assign(evaluationNodes, i, numSamplesWithLabelOfNetwork);
                 }
                 else
                     localEpochEvalErrors.Add(evaluationNodes, i, numSamplesWithLabelOfNetwork);
@@ -1106,13 +1105,7 @@ size_t SGD<ElemType>::TrainOneEpoch(ComputationNetworkPtr net,
             // hoist the criterion into CPU space for all-reduce
             localEpochCriterion.Assign(criterionNodes, 0, numSamplesWithLabelOfNetwork);
             for (size_t i = 0; i < evaluationNodes.size(); i++)
-            {
-                const bool isAggregationNode = evaluationNodes[i]->HasTag(L"aggregation");
-                // Aggregation nodes already contain aggregated error for all samples that passed through
-                // network in forward pass. For them we use 1 as number of samples to avoid averaging again.
-                const size_t samplesCount = isAggregationNode ? 1 : numSamplesWithLabelOfNetwork;
-                localEpochEvalErrors.Assign(evaluationNodes, i, samplesCount);
-            }
+                localEpochEvalErrors.Assign(evaluationNodes, i, numSamplesWithLabelOfNetwork);
 
             // copy all values to be aggregated into the header
             m_gradHeader->numSamples = aggregateNumSamples;
@@ -1309,8 +1302,8 @@ size_t SGD<ElemType>::TrainOneEpoch(ComputationNetworkPtr net,
                 const bool isAggregationNode = evaluationNodes[i]->HasTag(L"aggregation");
                 if (isAggregationNode)
                 {
-                    // For aggregation nodes, we aggregated error for all samples that passed through network so far,
-                    // instead of per minibatch error. So, we reset last logged error here.
+                    // For aggregation nodes we report aggregated error for all samples that passed through
+                    // network so far, instead of per minibatch error. So, we reset last logged error here.
                     epochEvalErrorsLastLogged[i] = EpochCriterion(0);
                 }
             }
