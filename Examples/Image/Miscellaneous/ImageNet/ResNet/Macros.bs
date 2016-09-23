@@ -1,15 +1,8 @@
-# basic components
-ConvLayer {outChannels, kernelSize, strideSize} = 
-    ConvolutionalLayer {outChannels, kernelSize, init = "heNormal", stride = strideSize, pad = true, bias = false}
-
-BNLayer {} = 
-    BatchNormalizationLayer {spatialRank = 2, normalizationTimeConstant = 0, useCntkEngine = false}
-
 # assembly components
 ## Convolution + Batch Normalization
 ConvBNLayer {outChannels, kernel, stride} = Sequential(
-    ConvLayer {outChannels, kernel, stride} :
-    BNLayer{}
+    ConvolutionalLayer {outChannels, kernel, init = "heNormal", stride = stride, pad = true, bias = false} :
+    BatchNormalizationLayer {spatialRank = 2, normalizationTimeConstant = 0, useCntkEngine = false}
 )
 
 ## Convolution + Batch Normalization + Rectifier Linear
@@ -19,27 +12,34 @@ ConvBNReLULayer {outChannels, kernelSize, strideSize} = Sequential(
 )
 
 # ResNet components
-ResNetBottleneckInc (outChannels, interOutChannels, input, stride = 2, strideA = 2, strideB = 1) = {
-    # Convolution
-    b = Sequential (
-        ConvBNReLULayer {interOutChannels, (1: 1), (strideA: strideA)} :
-        ConvBNReLULayer {interOutChannels, (3: 3), (strideB: strideB)} :
-        ConvBNReLULayer {outChannels, (1: 1), (1: 1)}) (input)
+ResNetBottleneckInc {outChannels, interOutChannels, stride = 2, strideA = 2, strideB = 1} = Sequential(
+    Parallel(
+        # Branch
+        Sequential (
+            ConvBNReLULayer {interOutChannels, (1: 1), (strideA: strideA)} :
+            ConvBNReLULayer {interOutChannels, (3: 3), (strideB: strideB)} :
+            ConvBNReLULayer {outChannels, (1: 1), (1: 1)}
+        ) :
+        # Shortcut
+        ConvBNReLULayer {outChannels, (1: 1), (stride: stride)},
+        # Plus
+        PlusA
+    ) :
+    ReLU
+)
 
-    # Shortcut
-    s = ConvBNReLULayer {outChannels, (1: 1), (stride: stride)} (input)
-
-    p = Plus(b, s)
-    y = ReLU(p)
-}.y
-
-ResNetBottleneck (outChannels, interOutChannels, input) = {
-    # Convolution
-    b = Sequential (
-        ConvBNReLULayer {interOutChannels, (1: 1), (1: 1)} :
-        ConvBNReLULayer {interOutChannels, (3: 3), (1: 1)} :
-        ConvBNReLULayer {outChannels, (1: 1), (1: 1)}) (input)
-
-    p = Plus(b, input)
-    y = ReLU(p)
-}.y
+ResNetBottleneck {outChannels, interOutChannels} = Sequential(
+    Parallel(
+        # Branch
+        Sequential (
+            ConvBNReLULayer {interOutChannels, (1: 1), (1: 1)} :
+            ConvBNReLULayer {interOutChannels, (3: 3), (1: 1)} :
+            ConvBNReLULayer {outChannels, (1: 1), (1: 1)}
+        ) :
+        # Shortcut
+        Identity,
+        # Plus
+        PlusA
+    ) :
+    ReLU
+)

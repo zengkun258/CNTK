@@ -313,6 +313,9 @@ ReduceMax               = CNTK2.ReduceMax
 Round                   = CNTK2.Round
 Sigmoid                 = CNTK2.Sigmoid
 
+# To support array style plus
+PlusA					= CNTK2.PlusA
+
 ##############################################################################
 # ComputationNodes
 ##############################################################################
@@ -397,6 +400,8 @@ CNTK2 = [
     Sqrt(_, tag='') = new ComputationNode [ operation = 'Sqrt' ; inputs = _ /*plus the function args*/ ]
     Square(_, tag='') = ElementTimes(_, _, tag=tag)
     Tanh(_, tag='') = new ComputationNode [ operation = 'Tanh' ; inputs = _ /*plus the function args*/ ]
+
+	PlusA(_, tag='') = new ComputationNode [ operation = 'Plus' ; inputs = (_[0] : _[1]) /*plus the function args*/ ]
 
     // 6. Reductions    
     ReduceSum   (_, axis=None, tag='') = { axis1 = if BS.Constants.IsNone (axis) then 0 else axis ; r = new ComputationNode [ operation = 'ReduceElements' ; inputs = _ ; axis = axis1 ; reductionOp = "Sum"    /*plus the function args*/ ]}.r

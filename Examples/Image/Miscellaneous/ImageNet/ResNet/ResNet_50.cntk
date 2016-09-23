@@ -1,7 +1,7 @@
 # Node: This ResNet-50 sample uses the BrainScriptBuilder
 #
 
-command = train:pbn:createEval:test
+command = train:pbn:test
 
 precision = "float"; traceLevel = 1 ; deviceId = "auto"
 
@@ -25,37 +25,41 @@ train = {
 
         cMap = 64: 128: 256: 512: 1024: 2048
 
-        model (features) = {
+        model = Sequential(
             # conv1 and max pooling
-            conv1 = ConvBNReLULayer {cMap[0], (7: 7), (2: 2)} (features)
-            pool1 = MaxPoolingLayer {(3: 3), stride = 2, pad = true} (conv1)
+            ConvBNReLULayer {cMap[0], (7: 7), (2: 2)} :
+            MaxPoolingLayer {(3: 3), stride = 2, pad = true} :
 
             # conv2_x
-            conv2_1 = ResNetBottleneckInc (cMap[2], cMap[0], pool1, stride = 1, strideA = 1, strideB = 1)
-            conv2_x_define (input) = ResNetBottleneck (cMap[2], cMap[0], input)
-            conv2_x = Sequential (conv2_x_define: conv2_x_define) (conv2_1)
+            ResNetBottleneckInc {cMap[2], cMap[0], stride = 1, strideA = 1, strideB = 1} :
+            ResNetBottleneck {cMap[2], cMap[0]} :
+            ResNetBottleneck {cMap[2], cMap[0]} :
 
             # conv3_x
-            conv3_1 = ResNetBottleneckInc (cMap[3], cMap[1], conv2_x)
-            conv3_x_define (input) = ResNetBottleneck (cMap[3], cMap[1], input)
-            conv3_x = Sequential (conv3_x_define: conv3_x_define: conv3_x_define) (conv3_1)
+            ResNetBottleneckInc {cMap[3], cMap[1]} :
+            ResNetBottleneck {cMap[3], cMap[1]} :
+            ResNetBottleneck {cMap[3], cMap[1]} :
+            ResNetBottleneck {cMap[3], cMap[1]} :
 
             # conv4_x
-            conv4_1 = ResNetBottleneckInc (cMap[4], cMap[2], conv3_x)
-            conv4_x_define (input) = ResNetBottleneck (cMap[4], cMap[2], input)
-            conv4_x = Sequential (conv4_x_define: conv4_x_define: conv4_x_define: conv4_x_define: conv4_x_define) (conv4_1)
+            ResNetBottleneckInc {cMap[4], cMap[2]} :
+            ResNetBottleneck {cMap[4], cMap[2]} :
+            ResNetBottleneck {cMap[4], cMap[2]} :
+            ResNetBottleneck {cMap[4], cMap[2]} :
+            ResNetBottleneck {cMap[4], cMap[2]} :
+            ResNetBottleneck {cMap[4], cMap[2]} :
 
             # conv5_x
-            conv5_1 = ResNetBottleneckInc (cMap[5], cMap[3], conv4_x)           
-            conv5_x_define (input) = ResNetBottleneck (cMap[5], cMap[3], input)
-            conv5_x = Sequential (conv5_x_define: conv5_x_define) (conv5_1)
+            ResNetBottleneckInc {cMap[5], cMap[3]} :           
+            ResNetBottleneck {cMap[5], cMap[3]} :
+            ResNetBottleneck {cMap[5], cMap[3]} :
 
             # avg pooling
-            pool2 = AveragePoolingLayer {(7: 7), stride = 1} (conv5_x)
+            AveragePoolingLayer {(7: 7), stride = 1} :
 
             # FC
-            ol = LinearLayer {labelDim, init= 'uniform'} (pool2)
-        }.ol
+            LinearLayer {labelDim, init= 'uniform'}
+        )
 
         # inputs
         features = Input {imageShape}
@@ -65,8 +69,9 @@ train = {
         ol = model (features)
 
         # loss and error computation
-        ce = CrossEntropyWithSoftmax (labels, ol)
-        errs = ClassificationError (labels, ol)
+        ce      = CrossEntropyWithSoftmax (labels, ol)
+        errs    = ClassificationError (labels, ol)
+        errs5   = ClassificationError(labels, ol, topN = 5)
 
         # declare special nodes
         featureNodes    = (features)
@@ -164,20 +169,14 @@ pbn={
     }
 }
 
-createEval={   
-    action="edit"
-    CurModel="$modelPath$.PBN"
-    NewModel="$modelPath$.Eval"
-    editPath="$ConfigDir$/CreateBSEvalModel.mel"
-}
-
 test={
     action="test"
-    modelPath="$modelPath$.Eval"
+    modelPath="$modelPath$.PBN"
     # Set minibatch size for testing.
     minibatchSize=100
 
     useDistributedMBReading=true
+    evalNodeNames = "errs5"
 
     reader={
         readerType="ImageReader"
