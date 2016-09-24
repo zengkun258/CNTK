@@ -32,7 +32,7 @@
 #   OPENCV_PATH= path to OpenCV 3.1.0 installation, so $(OPENCV_PATH) exists
 #     defaults to /usr/local/opencv-3.1.0
 #   LIBZIP_PATH= path to libzip installation, so $(LIBZIP_PATH) exists
-#     defaults to /usr/local/
+#     defaults to /usr/local/include
 #   BOOST_PATH= path to Boost installation, so $(BOOST_PATH)/include/boost/test/unit_test.hpp
 #     defaults to /usr/local/boost-1.60.0
 # These can be overridden on the command line, e.g. make BUILDTYPE=debug
@@ -725,13 +725,21 @@ endif
 ifdef OPENCV_PATH
 ifdef BOOST_PATH
 
-INCLUDEPATH += $(BOOST_PATH)/include
+ifeq ("$(BOOST_PATH)", "/usr/local/boost-1.60.0")
+  INCLUDEPATH += $(BOOST_PATH)/include
+else
+  INCLUDEPATH += $(BOOST_PATH)
+endif
 
 IMAGE_READER_LIBS += -lopencv_core -lopencv_imgproc -lopencv_imgcodecs
 
 ifdef LIBZIP_PATH
+  ifeq ("$(LIBZIP_PATH)", "/usr/local/include")
+    INCLUDEPATH += /usr/local/lib/libzip/include
+  else
+    INCLUDEPATH += $(LIBZIP_PATH)
+  endif
   CPPFLAGS += -DUSE_ZIP
-  INCLUDEPATH += $(LIBZIP_PATH)/lib/libzip/include
   IMAGE_READER_LIBS += -lzip
 endif
 
@@ -825,7 +833,11 @@ $(CNTK_CORE_BS): $(SOURCEDIR)/CNTK/BrainScript/CNTKCoreLib/CNTK.core.bs
 # only build unit tests when Boost is available
 ifdef BOOST_PATH
 
-INCLUDEPATH += $(BOOST_PATH)/include
+ifeq ("$(BOOST_PATH)", "/usr/local/boost-1.60.0")
+  INCLUDEPATH += $(BOOST_PATH)/include
+else
+  INCLUDEPATH += $(BOOST_PATH)
+endif
 
 BOOSTLIB_PATH = $(BOOST_PATH)/lib
 BOOSTLIBS := -lboost_unit_test_framework -lboost_filesystem -lboost_system
