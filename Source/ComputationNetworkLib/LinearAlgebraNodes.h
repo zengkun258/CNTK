@@ -1196,13 +1196,19 @@ template class CosDistanceWithNegativeSamplesNode<double>;
 // AccumulatorNode calculates mean values of all samples used in forward pass.
 // During training, mean sample value is calculated in each epoch. Value of the node will contain mean sample value of
 // its input node values since the beginning of epoch.
+// This node is useful for creating "per class" metrics like average class recall or mean intersection over union (mean 
+// IOU) which is standard metric in semantic labeling.
+// For mean IOU, we calculate ratio true_positives / (true_positives + false_negatives + false_positives) for all target
+// classes and then get mean of those values. true_positives, false_negatives, false_positives should be calculated over
+// the whole data set. Here we cannot calculate mean IOU per sample and then average the result. Instead, we use
+// AccumulatorNode to store those values over the whole data set.
 // -----------------------------------------------------------------------
 template <class ElemType>
 class AccumulatorNode : public ComputationNodeNonLooping<ElemType>, public NumInputs<1>
 {
     typedef ComputationNodeNonLooping<ElemType> Base;
     UsingComputationNodeMembersBoilerplate;
-    static const std::wstring TypeName();
+    static const std::wstring TypeName() { return L"Accumulator"; }
 
 public:
     AccumulatorNode(DEVICEID_TYPE deviceId, const wstring& name);
@@ -1211,9 +1217,9 @@ public:
 
     virtual void BackpropToNonLooping(size_t inputIndex) override;
 
-    virtual bool OutputUsedInComputingInputNodesGradients() const override;
+    virtual bool OutputUsedInComputingInputNodesGradients() const override { return false; }
 
-    virtual bool InputUsedInComputingInputNodesGradients(size_t childIndex) const override;
+    virtual bool InputUsedInComputingInputNodesGradients(size_t /*childIndex*/) const override { return false; }
 
     virtual void OnEpochStart() override;
 
@@ -1228,10 +1234,6 @@ public:
     virtual void RequestMatricesBeforeForwardProp(MatrixPool& matrixPool) override;
 
     // We don't release accumulator as it is needed after forward pass.
-
-    virtual void Save(File& fstream) const override;
-
-    virtual void Load(File& fstream, size_t modelVersion) override;
 
 protected:
     void Reset();

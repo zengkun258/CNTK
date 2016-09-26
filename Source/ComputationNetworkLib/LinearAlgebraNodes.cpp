@@ -8,12 +8,6 @@
 using namespace Microsoft::MSR::CNTK;
 
 template <class ElemType>
-/*static*/ const std::wstring AccumulatorNode<ElemType>::TypeName()
-{
-    return L"Accumulator";
-}
-
-template <class ElemType>
 AccumulatorNode<ElemType>::AccumulatorNode(DEVICEID_TYPE deviceId, const wstring& name)
     : Base(deviceId, name), m_numSamples(0)
 {
@@ -33,18 +27,6 @@ void AccumulatorNode<ElemType>::BackpropToNonLooping(size_t /*inputIndex*/)
 }
 
 template <class ElemType>
-bool AccumulatorNode<ElemType>::OutputUsedInComputingInputNodesGradients() const
-{
-    return false;
-}
-
-template <class ElemType>
-bool AccumulatorNode<ElemType>::InputUsedInComputingInputNodesGradients(size_t /*childIndex*/) const
-{
-    return false;
-}
-
-template <class ElemType>
 void AccumulatorNode<ElemType>::OnEpochStart()
 {
     Reset();
@@ -61,8 +43,8 @@ void AccumulatorNode<ElemType>::ForwardPropNonLooping()
     size_t totalNumSamples = m_numSamples + numNewSamples;
     if (totalNumSamples == 0)
         totalNumSamples = 1;
-    ElemType alpha = static_cast<ElemType>(1.0f) / totalNumSamples;
-    ElemType beta = static_cast<ElemType>(m_numSamples) / totalNumSamples;
+    ElemType alpha = (ElemType)1.0f / totalNumSamples;
+    ElemType beta = (ElemType)m_numSamples / totalNumSamples;
 
     size_t rank = DetermineElementwiseTensorRank();
     auto input = Input(0)->ValueTensorFor(rank, fr);
@@ -76,12 +58,6 @@ void AccumulatorNode<ElemType>::ForwardPropNonLooping()
     Value().SetValue(*m_accumulator);
 
     m_numSamples += numNewSamples;
-#if NANCHECK
-    Value().HasNan("Accumulator");
-#endif
-#if DUMPOUTPUT
-    Value().Print("AccumulatorNode");
-#endif
 }
 
 template <class ElemType>
@@ -108,15 +84,10 @@ template <class ElemType>
 void AccumulatorNode<ElemType>::RequestMatricesBeforeForwardProp(MatrixPool& matrixPool)
 {
     Base::RequestMatricesBeforeForwardProp(matrixPool);
-    if (m_accumulator == nullptr)
-    {
-        RequestMatrixFromPool(m_accumulator, matrixPool);
-        const size_t sampleSize = GetSampleLayout().GetNumElements();
-        m_accumulator->Resize(sampleSize, 1);
-        Reset();
-    }
-    // else, accumulator is already allocated. This happens when training is resumed. Load function creates accumulator
-    // and fills it with previously saved value.
+    RequestMatrixFromPool(m_accumulator, matrixPool);
+    const size_t sampleSize = GetSampleLayout().GetNumElements();
+    m_accumulator->Resize(sampleSize, 1);
+    Reset();
 }
 
 template <class ElemType>
@@ -124,23 +95,6 @@ void AccumulatorNode<ElemType>::Reset()
 {
     m_accumulator->SetValue(0);
     m_numSamples = 0;
-}
-
-template <class ElemType>
-void AccumulatorNode<ElemType>::Save(File& fstream) const
-{
-    Base::Save(fstream);
-    fstream << m_numSamples;
-    fstream << *m_accumulator;
-}
-
-template <class ElemType>
-void AccumulatorNode<ElemType>::Load(File& fstream, size_t modelVersion)
-{
-    Base::Load(fstream, modelVersion);
-    fstream >> m_numSamples;
-    CreateMatrixIfNull(m_accumulator);
-    fstream >> *m_accumulator;
 }
 
 template class AccumulatorNode<float>;
