@@ -20,8 +20,8 @@ train = {
     BrainScriptNetworkBuilder = {
         include "$configDir$/Macros.bs"
 
-        imageShape = 224: 224: 3          # image dimensions
-        labelDim = 1000                   # number of distinct labels
+        imageShape  = 224: 224: 3          # image dimensions
+        labelDim    = 1000                 # number of distinct labels
 
         cMap = 64: 128: 256: 512: 1024: 2048
 
@@ -62,16 +62,16 @@ train = {
         )
 
         # inputs
-        features = Input {imageShape}
-        labels = Input {labelDim}
+        features    = Input {imageShape}
+        labels      = Input {labelDim}
 
         # apply model to features
-        ol = model (features)
+        ol          = model (features)
 
         # loss and error computation
-        ce      = CrossEntropyWithSoftmax (labels, ol)
-        errs    = ClassificationError (labels, ol)
-        errs5   = ClassificationError(labels, ol, topN = 5)
+        ce          = CrossEntropyWithSoftmax (labels, ol)
+        errs        = ClassificationError (labels, ol)
+        top5Errs    = ClassificationError(labels, ol, topN = 5)
 
         # declare special nodes
         featureNodes    = (features)
@@ -99,99 +99,97 @@ train = {
             distributedMBReading = "true"
             parallelizationStartEpoch = 1
             DataParallelSGD = {
-                gradientBits=32
+                gradientBits = 32
             }
         }
     }
 
-    reader={
-        readerType="ImageReader"
-        file="$DataDir$/train_map.txt"
-        randomize="Auto"
-        features={
+    reader = {
+        readerType = "ImageReader"
+        file = "$DataDir$/train_map.txt"
+        randomize = "Auto"
+        features = {
             # Below are the required parameters.
-            width=224
-            height=224
-            channels=3
+            width = 224
+            height = 224
+            channels = 3
             # Below are the optional parameters.
             # Possible values: Center, Random. Default: Center
-            cropType="Random"
+            cropType = "Random"
             # Horizontal random flip, will be enabled by default if cropType=Random
-            hflip="true"
+            hflip = "true"
             # Crop scale ratio. Examples: cropRatio=0.9, cropRatio=0.7:0.9. Default: 1.
-            cropRatio=0.46666:0.875
+            cropRatio = 0.46666:0.875
             # Crop scale ratio jitter type.
             # Possible values: None, UniRatio, UniLength, UniArea. Default: UniRatio
-            jitterType="UniRatio"
+            jitterType = "UniRatio"
             # The file stores mean values for each pixel in OpenCV matrix XML format.
-            meanFile="$ConfigDir$/ImageNet1K_mean.xml"
+            meanFile = "$ConfigDir$/ImageNet1K_mean.xml"
         }
-        labels={
-            labelDim=1000
+        labels = {
+            labelDim = 1000
         }
     }
 }
 
-pbn={
-    action="pbn"
-    modelPath="$modelPath$"
+pbn = {
+    action = "pbn"
+    modelPath = "$modelPath$"
     # Set minibatch size for testing.
-    minibatchSize=256
-    iters=30
+    minibatchSize = 256
+    iters = 30
 
-    useDistributedMBReading=true
-
-    reader={
-        readerType="ImageReader"
-        file="$DataDir$/train_map.txt"
-        randomize="Auto"
-        features={
+    reader = {
+        readerType = "ImageReader"
+        file = "$DataDir$/train_map.txt"
+        randomize = "Auto"
+        features = {
             # Below are the required parameters.
-            width=224
-            height=224
-            channels=3
+            width       = 224
+            height      = 224
+            channels    = 3
             # Below are the optional parameters.
             # Possible values: Center, Random. Default: Center
-            cropType="Random"
+            cropType    = "Random"
             # Horizontal random flip, will be enabled by default if cropType=Random
-            hflip="true"
+            hflip       = "true"
             # Crop scale ratio. Examples: cropRatio=0.9, cropRatio=0.7:0.9. Default: 1.
-            cropRatio=0.46666:0.875
+            cropRatio   = 0.46666:0.875
             # Crop scale ratio jitter type.
             # Possible values: None, UniRatio, UniLength, UniArea. Default: UniRatio
-            jitterType="UniRatio"
+            jitterType  = "UniRatio"
             # The file stores mean values for each pixel in OpenCV matrix XML format.
-            meanFile="$ConfigDir$/ImageNet1K_mean.xml"
+            meanFile    = "$ConfigDir$/ImageNet1K_mean.xml"
         }
-        labels={
-            labelDim=1000
+        labels = {
+            labelDim = 1000
         }
     }
 }
 
-test={
-    action="test"
-    modelPath="$modelPath$.PBN"
+test = {
+    action = "test"
+    modelPath = "$modelPath$.PBN"
     # Set minibatch size for testing.
-    minibatchSize=100
+    minibatchSize = 100
 
-    useDistributedMBReading=true
+    useDistributedMBReading = true
     evalNodeNames = "errs5"
 
     reader={
-        readerType="ImageReader"
-        file="$DataDir$/val_map.txt"
-        randomize="None"
-        features={
-            width=224
-            height=224
-            channels=3
-            cropType="Center"
-            cropRatio=0.875
-            meanFile="$ConfigDir$/ImageNet1K_mean.xml"
+        readerType = "ImageReader"
+        file = "$DataDir$/val_map.txt"
+        randomize = "None"
+        features = {
+            width = 224
+            height = 224
+            channels = 3
+            cropType = "Center"
+            cropRatio = 0.875
+            meanFile = "$ConfigDir$/ImageNet1K_mean.xml"
         }
-        labels={
-            labelDim=1000
+        labels = {
+            labelDim = 1000
         }
     }    
 }
