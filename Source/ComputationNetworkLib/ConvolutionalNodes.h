@@ -186,7 +186,9 @@ protected:
     }
 
     // Derived classes implement transforms calculation. Since all derived classes are filter based we consolidate common
-    // filter transform calculation here to be reused by derived classes.
+    // filter transform calculation here to be reused by derived classes. For example convolution and de-convolution
+    // have same transform but inversed, hence both of them may reuse this method and one will call inverse in addition
+    // (similar holds for pooling nodes).
     SpaceTransform ComputeFilterTransform()
     {
         std::shared_ptr<const ConvolveGeometry> geometry = m_convEng->Geometry();
@@ -504,29 +506,28 @@ public:
     }
 
 private:
+    using TransformerNode<ConvolutionNode<ElemType>>::m_transforms;
+    using ConvolutionNodeBase<ElemType>::ComputeFilterTransform;
+
     virtual void /*ITransformerNode::*/ComputeTransforms() override
     {
-        if (this->m_transforms[1].m_axisTransforms.size() == 0)
+        if (m_transforms[1].m_axisTransforms.empty())
         {
-            this->m_transforms[1] = this->ComputeFilterTransform();
+            m_transforms[1] = ComputeFilterTransform();
             if (!m_transpose)
             {
                 // Convolution, need to inverse transform.
-                this->m_transforms[1] = this->m_transforms[1].Inverse();
+                m_transforms[1] = m_transforms[1].Inverse();
             }
             // else: Deconvolution, nothing to do.
         }
         // else: transform already computed, no need to do computation again.
     }
 
-    virtual bool /*ITransformerNode::*/SupportsTransformOnInput(int inputIndex) override
+    virtual bool /*ITransformerNode::*/SupportsTransformOnInput(size_t inputIndex) override
     {
         // We support transforms just on convolution input.
-        if (inputIndex == 1)
-        {
-            return true;
-        }
-        return false;
+        return (inputIndex == 1);
     }
 
 protected:
@@ -624,17 +625,20 @@ public:
     }
 
 private:
+    using TransformerNode<PoolingNode<ElemType>>::m_transforms;
+    using ConvolutionNodeBase<ElemType>::ComputeFilterTransform;
+
     virtual void /*ITransformerNode::*/ComputeTransforms() override
     {
-        if (this->m_transforms[0].m_axisTransforms.size() == 0)
+        if (m_transforms[0].m_axisTransforms.empty())
         {
-            this->m_transforms[0] = this->ComputeFilterTransform();
-            this->m_transforms[0] = this->m_transforms[0].Inverse();
+            m_transforms[0] = ComputeFilterTransform();
+            m_transforms[0] = m_transforms[0].Inverse();
         }
         // else: transform already computed, no need to do it again.
     }
 
-    virtual bool /*ITransformerNode::*/SupportsTransformOnInput(int /*inputIndex*/) override
+    virtual bool /*ITransformerNode::*/SupportsTransformOnInput(size_t /*inputIndex*/) override
     {
         // We support transforms on all inputs (one here).
         return true;
@@ -743,23 +747,22 @@ public:
     }
 
 private:
+    using TransformerNode<MaxUnpoolingNode<ElemType>>::m_transforms;
+    using ConvolutionNodeBase<ElemType>::ComputeFilterTransform;
+
     virtual void /*ITransformerNode::*/ComputeTransforms() override
     {
-        if (this->m_transforms.size() == 0)
+        if (m_transforms.size() == 0)
         {
-            this->m_transforms[0] = this->ComputeFilterTransform();
+            m_transforms[0] = ComputeFilterTransform();
         }
         // else: transform already computed, no need to do it again.
     }
 
-    virtual bool /*ITransformerNode::*/SupportsTransformOnInput(int inputIndex) override
+    virtual bool /*ITransformerNode::*/SupportsTransformOnInput(size_t inputIndex) override
     {
         // We support transform for just unpool input.
-        if (inputIndex == 0)
-        {
-            return true;
-        }
-        return false;
+        return (inputIndex == 0);
     }
 };
 

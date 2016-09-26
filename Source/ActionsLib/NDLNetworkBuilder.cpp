@@ -531,10 +531,11 @@ void NDLNodeEvaluatorImpl<ElemType>::Evaluate(NDLNode<ElemType>* node, const wst
     }
     else if (cnNodeType == OperationNameOf(CropNode))
     {
-        // We expect 4 parameters: 2 inputs and 2 offsets
-        if (parameter.size() != 4)
+        // We expect 3 or 5 inputs.
+        if (parameter.size() != 3 && parameter.size() != 5)
         {
-            RuntimeError("%ls should have 4 fixed parameters[input1, input2, offsetX, offsetY].", cnNodeType.c_str());
+            RuntimeError("%ls accepts inputs: [input1, input2, manual, offsetX, offsetY] \
+                                         or [input1, input2, auto] or [input1, input2, auto, eqNode1, eqNode2].", cnNodeType.c_str());
         }
 
         // After we are done with processing parameters here we still need to process two inputs (just offsets are
@@ -548,15 +549,41 @@ void NDLNodeEvaluatorImpl<ElemType>::Evaluate(NDLNode<ElemType>* node, const wst
             int id = 2;
             vector<void*> params = EvaluateParameters(node, baseName, id, parameter.size() - id, pass);
 
-            // Take offsets from evaluated parameters.
-            int offsetX = ((NDLNode<ElemType>*) params[0])->GetScalar();
-            int offsetY = ((NDLNode<ElemType>*) params[1])->GetScalar();
+            // Take the type of cropping.
+            string type = ((NDLNode<ElemType>*) params[0])->GetValue();
 
-            if (offsetX < 0 || offsetX < 0)
-                RuntimeError("Offsets in crop node must be non-negative");
-
-            // Create crop node without inputs (will be attached later).
-            nodePtr = builder.Crop(nullptr, nullptr, static_cast<size_t>(offsetX), static_cast<size_t>(offsetY), name);
+            if (type == "manual")
+            {
+                // We expect two more inputs (offsets).
+                if (parameter.size() != 5)
+                {
+                    RuntimeError("%ls in manual mode expects inputs: [input1, input2, manual, offsetX, offsetY]", cnNodeType.c_str());
+                }
+                // Take offsets from evaluated parameters.
+                size_t offsetX = ((NDLNode<ElemType>*) params[1])->GetScalar();
+                size_t offsetY = ((NDLNode<ElemType>*) params[2])->GetScalar();
+                // Create crop node without inputs (will be attached later).
+                nodePtr = builder.Crop(nullptr, nullptr, offsetX, offsetY, name);
+            }
+            else if (type == "auto")
+            {
+                if (parameter.size() == 3)
+                {
+                    // We are in crop mode without equivalence nodes.
+                    nodePtr = builder.Crop(nullptr, nullptr, nullptr, nullptr, name);
+                }
+                else
+                {
+                    // We are in crop mode with equivalence nodes.
+                    wstring eqNode1 = ((NDLNode<ElemType>*) params[1])->GetValue();
+                    wstring eqNode2 = ((NDLNode<ElemType>*) params[2])->GetValue();
+                    nodePtr = builder.Crop(nullptr, nullptr, eqNode1.c_str(), eqNode2.c_str(), name);
+                }
+            }
+            else
+            {
+                RuntimeError("Unknown crop type %ls, must be manual or auto.", cnNodeType.c_str());
+            }
         }
     }
     else
