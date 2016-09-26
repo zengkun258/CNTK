@@ -22,9 +22,6 @@ using namespace Microsoft::MSR::CNTK;
 template<typename ElemType>
 using GetEvalProc = void(*)(IEvaluateModelExtended<ElemType>**);
 
-typedef std::pair<std::wstring, std::vector<float>*> Variable;
-typedef std::map<std::wstring, std::vector<float>*> Variables;
-
 std::unordered_map<std::string, size_t> buildVocab(std::string filePath)
 {
     std::ifstream ifs(filePath);
@@ -34,12 +31,10 @@ std::unordered_map<std::string, size_t> buildVocab(std::string filePath)
     std::string line;
     while (std::getline(ifs, line))
     {
-        vocab.insert(std::pair<std::string, size_t>(line, idx));
-        idx += 1;
+        vocab.insert(std::pair<std::string, size_t>(line, idx++));
     }
 
     ifs.close();
-
     return vocab;
 }
 
@@ -52,12 +47,10 @@ std::unordered_map<size_t, std::string> buildInvVocab(std::string filePath)
     std::string line;
     while (std::getline(ifs, line))
     {
-        vocab.insert(std::pair<size_t, std::string>(idx, line));
-        idx += 1;
+        vocab.insert(std::pair<size_t, std::string>(idx++, line));
     }
 
     ifs.close();
-
     return vocab;
 }
 
@@ -110,7 +103,10 @@ std::vector<std::string> feedInputVectors(std::string sentence, std::unordered_m
     size_t end = sentence.find_first_of(delimiters);
     while (end != sentence.npos)
     {
-        words.push_back(sentence.substr(begin, end - begin));
+        if (end > begin)
+        {
+            words.push_back(sentence.substr(begin, end - begin));
+        }
         begin = end + 1;
         end = sentence.find(delimiters, begin);
     }
@@ -157,7 +153,7 @@ IEvaluateModelExtended<float>* SetupNetworkAndGetLayouts(std::string modelDefini
     }
     catch (std::exception& ex)
     {
-        fprintf(stderr, "%s\n", ex.what());
+        fprintf(stderr, "Error: Creating network failed. Exception: %s\n", ex.what());
         throw;
     }
     fflush(stderr);
@@ -188,10 +184,9 @@ IEvaluateModelExtended<float>* SetupNetworkAndGetLayouts(std::string modelDefini
 /// located in the <see cref="eval.h"/> file.
 /// The CNTK evaluation library (EvalDLL.dll on Windows, and LibEval.so on Linux), must be found through the system's path. 
 /// The other requirement is that Eval.h be included
-/// In order to run this program the model must already exist in the example. To create the model,
-/// first run the example in <CNTK>/Examples/Text/ATIS. Once the model file ATIS.slot.lstm is created,
+/// In order to run this program the model used by the example must already exist. To create the model,
+/// first train the model as described in <CNTK>/Examples/Text/ATIS. Once the model file ATIS.slot.lstm is created,
 /// you can run this client.
-/// This program demonstrates the usage of the Evaluate method requiring the input and output layers as parameters.
 int main(int argc, char* argv[])
 {
     // Get the binary path (current working directory)
@@ -288,7 +283,7 @@ int main(int argc, char* argv[])
 
     words.erase(words.begin());
     words.pop_back();
-    fprintf(stdout, "Slot tag for sentence \"%s\" is as followings:\n", inputSequences.c_str());
+    fprintf(stdout, "Slot tag for sentence \"%s\" is as following:\n", inputSequences.c_str());
     for (size_t i = 0; i < outputs.size(); i++)
     {
         fprintf(stdout, "%10s -- %s\n", words[i].c_str(), outputs[i].c_str());

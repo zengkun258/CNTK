@@ -13,7 +13,7 @@
     <RootNamespace>Microsoft.MSR.CNTK.Extensibility.Managed.CSEvalClientTest</RootNamespace>
     <AssemblyName>CSEvalClientTest</AssemblyName>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
-    <FileAlignment>512</FileAlignment>   
+    <FileAlignment>512</FileAlignment>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
     <DebugSymbols>true</DebugSymbols>
@@ -64,13 +64,15 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="App.config" />
+    <None Include="App.config">
+      <SubType>Designer</SubType>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\Source\Extensibility\EvalWrapper\EvalWrapper.vcxproj">
       <Project>{ef766cae-9cb1-494c-9153-0030631a6340}</Project>
       <Name>EvalWrapper</Name>
     </ProjectReference>
-  </ItemGroup>  
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
