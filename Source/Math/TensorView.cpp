@@ -22,8 +22,12 @@
 #include "stdafx.h"
 #include "Basics.h"
 #include "TensorView.h"
-#include "../../../Source/Math/BlockMultiplier.h"
+#include "BlockMultiplier.h"
 #include <array>
+#include "BlockHandlerSSE.h"
+#ifdef SUPPORT_AVX2
+#include "BlockHandlerAVX.h"
+#endif
 
 #ifndef let
 #define let const auto
@@ -470,7 +474,11 @@ void TensorView<ElemType>::AssignQuantizedMatrixProductOf(const TensorView& a, b
     auto shapeB = b.m_shape;
     auto shapeC = m_shape;
     FlattenShapesToMatrix(shapeA, transA, shapeB, /*transC*/false, shapeC, /*transC*/false);
+#ifdef SUPPORT_AVX2
     BlockMultiplier<BlockHandlerAVX> mult;
+#else
+    BlockMultiplier<BlockHandlerSSE> mult;
+#endif
     //BlockMultiplier<BlockHandlerSSE> mult;
     int16_t* newA;
     ElemType scaleA;

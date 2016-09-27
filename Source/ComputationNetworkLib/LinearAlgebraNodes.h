@@ -8,7 +8,7 @@
 #include "ComputationNode.h"
 #include "Matrix.h"
 #include "TensorView.h"
-#include "../../../Source/Math/BlockMultiplier.h"
+#include "BlockMultiplier.h"
 
 #include <unordered_set>
 #include <map>
