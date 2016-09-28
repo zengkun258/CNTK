@@ -338,39 +338,4 @@ def test_net(net, imdb, output_dir, feature_scale, classifier = 'svm', nmsThresh
         nms_dets = all_boxes
 
     print 'Evaluating detections'
-    imdb.evaluate_detections(nms_dets, output_dir, boUsePythonImpl = boUsePythonImpl)
-
-# #similar to 'test_net' but using all detections rather than the ones above a threshold
-# def test_net_simple(net, imdb, output_dir, feature_scale, classifier = 'svm', nmsThreshold = 0.3, boUsePythonImpl = False):
-#     num_images = len(imdb.image_index)
-#     # all detections are collected into:
-#     #    all_boxes[cls][image] = N x 5 array of detections in
-#     #    (x1, y1, x2, y2, score)
-#     all_boxes = [[[] for _ in xrange(num_images)]
-#                  for _ in xrange(imdb.num_classes)]
-#
-#     #construct all_boxes variable using all detections
-#     roidb = imdb.roidb
-#     for i in xrange(num_images):
-#         if i % 1000 == 0:
-#             print "   Processing image {} of {}..".format(i, num_images)
-#         scores, _, _ = im_detect(net, i, roidb[i]['boxes'], feature_scale = feature_scale, classifier = classifier)
-#
-#         for j in xrange(1, imdb.num_classes):
-#             inds = np.where(roidb[i]['gt_classes'] == 0)[0]
-#             cls_scores = scores[inds, j]
-#             cls_boxes = roidb[i]['boxes'][inds]
-#             all_boxes[j][i] = \
-#                     np.hstack((cls_boxes, cls_scores[:, np.newaxis])) \
-#                     .astype(np.float32, copy=False)
-#
-#     if True:
-#         print "Number of rois before non-maxima surpression: %d" % sum([len(all_boxes[j]) for j in xrange(1, imdb.num_classes)])
-#         nms_dets,_ = apply_nms(all_boxes, nmsThreshold, boUsePythonImpl)
-#         print "Number of rois  after non-maxima surpression: %d" %  sum([len(nms_dets[j]) for j in xrange(1, imdb.num_classes)])
-#     else:
-#         print "Skipping non-maxima surpression"
-#         nms_dets = all_boxes
-#
-#     print 'Evaluating detections'
-#     imdb.evaluate_detections(nms_dets, output_dir, boUsePythonImpl = boUsePythonImpl)
+    imdb.evaluate_detections(nms_dets, output_dir)

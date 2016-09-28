@@ -1,6 +1,4 @@
 from cntk_helpers import *
-from pabuehle_utilities_CV_v1 import *
-from pabuehle_utilities_general_v0 import *
 from imdb_data import imdb_data
 import fastRCNN, time, datetime
 from fastRCNN.pascal_voc import pascal_voc # as nmsPython
@@ -20,7 +18,7 @@ print "PARAMETERS: datasetName = " + datasetName
 # default parameters
 ############################
 #directories
-rootDir = "C:/Temp/RCNN/PythonScripts/" #"D:/rnnObjectDetection/"
+rootDir = "D:/git/cntk_philippBranch/CNTK/Examples/Image/Detection/FastRCNN/PythonScripts/" #"D:/rnnObjectDetection/"
 imgDir = rootDir + "data/" + datasetName + "/"
 procDir = rootDir + "proc/" + datasetName + "/"
 resultsDir = rootDir + "results/" + datasetName + "/"

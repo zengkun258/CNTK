@@ -1,19 +1,24 @@
-Code
+Patrick
+- (done) Add required utility functions into cntk helpers
 - remove non required libs from requirements.txt
-- make requirements.txt self contained (do not require precompiled wheels in repo)
-- Add required utility functions into cntk helpers
-- Create new toy sample using pascal subset and 100 ROIs per image
+- (done) clean up code (Patrick knows TODOs)
+- Investigate conversion to python 3.4
+- write blog
+- document knobs and parameters
+
+Philipp
+- make AlexNet model available and store in ressources/cntk_model
+- put wheels on public share
+- investigate making requirements.txt self contained (do not require precompiled wheels in repo)
 - pass NumRoi parameters to cntk.exe call (math in BS?)
-- Convert to python 3.4
-- clean up code (Patrick knows TODOs)
+- Create new toy sample using pascal subset and 100 ROIs per image
+- Do CR for python scripts
+- Write cntk wiki for fast rcnn
 
 Discuss
 - data set setup (neg, pos, test) vs. (train, test)
 
-Setup
-- make AlexNet model available and store in ressources/cntk_model
-
 Describe VOC setup
 - get selective search ROIs
 - get 2007 and 2012 dev kits
-- descrie maxNrRois option for fast testing
+- describe maxNrRois option for fast testing

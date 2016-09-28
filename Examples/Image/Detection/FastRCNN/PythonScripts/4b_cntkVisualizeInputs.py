@@ -36,8 +36,8 @@ assert(len(imgPaths) == len(roiAllCoords) == len(roiAllLabels) == len(nrRealRois
 #loop over all images and visualize
 for imgIndex,imgPath in enumerate(imgPaths):
     print "Visualizing image %d at %s..." %(imgIndex,imgPath)
-    roiCoords = roiAllCoords[imgIndex][:nrRealRois[i]]
-    roiLabels = roiAllLabels[imgIndex][:nrRealRois[i]]
+    roiCoords = roiAllCoords[imgIndex][:nrRealRois[imgIndex]]
+    roiLabels = roiAllLabels[imgIndex][:nrRealRois[imgIndex]]
 
     #perform non-maxima surpression. note that the detected classes in the image is not affected by this.
     nmsKeepIndices = []

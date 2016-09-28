@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import sys, os, importlib
+import sys, os, importlib, random
 import PARAMETERS
 locals().update(importlib.import_module("PARAMETERS").__dict__)
 

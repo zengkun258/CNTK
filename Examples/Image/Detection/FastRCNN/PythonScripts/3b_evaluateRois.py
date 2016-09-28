@@ -48,6 +48,6 @@ print "Average number of rois per image " + str(1.0 * sum(roiCounts) / len(overl
 
 #compute recall at different overlaps
 overlaps = np.array(overlaps, np.float32)
-for overlapThreshold in linspace(0,1.1,.1):
+for overlapThreshold in np.linspace(0,1,11):
     recall = 1.0 * sum(overlaps >= overlapThreshold) / len(overlaps)
     print "At threshold {:.2f}: recall = {:2.2f}".format(overlapThreshold, recall)
