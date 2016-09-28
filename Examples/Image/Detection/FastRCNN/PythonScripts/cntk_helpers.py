@@ -616,9 +616,9 @@ def getColumn(table, columnIndex):
         column.append(row[columnIndex])
     return column
 
-def writeTable(outputFile, table):
-    lines = tableToList1D(table)
-    writeFile(outputFile, lines)
+def deleteFile(filePath):
+    if os.path.exists(filePath):
+        os.remove(filePath)
 
 def writeFile(outputFile, lines):
     with open(outputFile,'w') as f:
@@ -926,6 +926,36 @@ def bboxComputeOverlapVoc(bbox1, bbox2):
 
 def computeAveragePrecision(recalls, precisions, use_07_metric=False):
     """ ap = voc_ap(recalls, precisions, [use_07_metric])
+    Compute VOC AP given precision and recall.
+    If use_07_metric is true, uses the
+    VOC 07 11 point method (default:False).
+    """
+    if use_07_metric:
+        # 11 point metric
+        ap = 0.
+        for t in np.arange(0., 1.1, 0.1):
+            if np.sum(recalls >= t) == 0:
+                p = 0
+            else:
+                p = np.max(precisions[recalls >= t])
+            ap = ap + p / 11.
+    else:
+        # correct AP calculation
+        # first append sentinel values at the end
+        mrecalls = np.concatenate(([0.], recalls, [1.]))
+        mprecisions = np.concatenate(([0.], precisions, [0.]))
+
+        # compute the precision envelope
+        for i in range(mprecisions.size - 1, 0, -1):
+            mprecisions[i - 1] = np.maximum(mprecisions[i - 1], mprecisions[i])
+
+        # to calculate area under PR curve, look for points
+        # where X axis (recall) changes value
+        i = np.where(mrecalls[1:] != mrecalls[:-1])[0]
+
+        # and sum (\Delta recall) * prec
+        ap = np.sum((mrecalls[i + 1] - mrecalls[i]) * mprecisions[i + 1])
+    return ap
     Compute VOC AP given precision and recall.
     If use_07_metric is true, uses the
     VOC 07 11 point method (default:False).
