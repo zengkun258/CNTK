@@ -2,9 +2,6 @@ import pdb, sys, os, time
 import numpy as np
 import selectivesearch
 from easydict import EasyDict
-sys.path.append('C:\Users\pabuehle\Desktop\PROJECTS\pythonLibrary')
-from pabuehle_utilities_CV_v1 import *
-from pabuehle_utilities_general_v0 import *
 from fastRCNN.nms import nms as nmsPython
 
 
@@ -97,10 +94,9 @@ def filterRois(rects, maxWidth, maxHeight, roi_minNrPixels, roi_maxNrPixels,
         filteredRects.append(rect)
         filteredRectsSet.add(tuple(rect))
 
-    #could also filter rectangles that have similar (but not exactly the same) co-ordinates
-    #could also perform non-maxima surpression
+    #could combine rectangles using non-maxima surpression or with similar co-ordinates
     #groupedRectangles, weights = cv2.groupRectangles(np.asanyarray(rectsInput, np.float).tolist(), 1, 0.3)
-    #groupedRectangles = non_max_suppression_slow(np.asarray(rectsInput, np.float), 0.5)
+    #groupedRectangles = nms_python(np.asarray(rectsInput, np.float), 0.5)
     assert(len(filteredRects) > 0)
     return filteredRects
 
@@ -127,7 +123,7 @@ def readGtAnnotation(imgPath):
     return bboxes, labels
 
 
-# def cropGetParams(imgWidth, imgHeight):
+# def cropTransformRoiParams(imgWidth, imgHeight):
 #     mindim = np.min([imgWidth, imgHeight])
 #     maxdim = np.max([imgWidth, imgHeight])
 #     targetw = targeth = mindim
@@ -136,20 +132,19 @@ def readGtAnnotation(imgPath):
 #     return targetw, targeth, cropOffset, boCropXDim
 #
 #
-# def cropGetOffsetCoord(val, maxVal, crop_offset):
-#     val = val - crop_offset
-#     val = max(0, val)
-#     return min(val, maxVal)
-#
-#
 # def cropTransformRoi(rect, cropOffset, boCropXDim, targetImgDim):
+#   def offsetMinMax(val, maxVal, crop_offset):
+#       val = val - crop_offset
+#       val = max(0, val)
+#       return min(val, maxVal)
+#
 #     x, y, x2, y2 = np.asarray(rect)
 #     if boCropXDim:
-#         x  = cropGetOffsetCoord(x,  targetImgDim - 1, cropOffset)
-#         x2 = cropGetOffsetCoord(x2, targetImgDim - 1, cropOffset)
+#         x  = offsetMinMax(x,  targetImgDim - 1, cropOffset)
+#         x2 = offsetMinMax(x2, targetImgDim - 1, cropOffset)
 #     else:
-#         y  = cropGetOffsetCoord(y,  targetImgDim - 1, cropOffset)
-#         y2 = cropGetOffsetCoord(y2, targetImgDim - 1, cropOffset)
+#         y  = offsetMinMax(y,  targetImgDim - 1, cropOffset)
+#         y2 = offsetMinMax(y2, targetImgDim - 1, cropOffset)
 #     return [x, y, x2, y2]
 
 
@@ -226,13 +221,15 @@ def cntkPadInputs(currentNrRois, targetNrRois, nrClasses, boxesStr, labelsStr):
 
 def checkCntkOutputFile(cntkImgsListPath, cntkOutputPath, cntkNrRois, outputDim):
     imgPaths = getColumn(readTable(cntkImgsListPath), 1)
-    dnnOutputAccessor = readFileAccessor(cntkOutputPath)
-    for imgIndex in range(len(imgPaths)):
-        if imgIndex % 100 == 1:
-            print "Checking cntk output file, image %d of %d..." % (imgIndex, len(imgPaths))
-        for roiIndex in range(cntkNrRois):
-            assert (dnnOutputAccessor.next() != "")
-    assert (dnnOutputAccessor.next() == "") #test if end-of-file is reached
+    #dnnOutputAccessor = readFileAccessor(cntkOutputPath)
+    with open(cntkOutputPath) as fp:
+        for imgIndex in range(len(imgPaths)):
+            if imgIndex % 100 == 1:
+                print "Checking cntk output file, image %d of %d..." % (imgIndex, len(imgPaths))
+            for roiIndex in range(cntkNrRois):
+                assert (fp.readline() != "")
+                #assert (dnnOutputAccessor.next() != "")
+        assert (fp.readline() == "") #test if end-of-file is reached
 
 
 #parse the cntk output file and save the output for each image individually
@@ -244,29 +241,29 @@ def parseCntkOutput(cntkImgsListPath, cntkOutputPath, outParsedDir, cntkNrRois, 
     # parse cntk output and write file for each image
     # always read in data for each image to forward file pointer
     imgPaths = getColumn(readTable(cntkImgsListPath), 1)
-    dnnOutputAccessor = readFileAccessor(cntkOutputPath)
-    for imgIndex in range(len(imgPaths)):
-        lines = [dnnOutputAccessor.next() for _ in range(cntkNrRois)]
-        if skip5Mod != None and imgIndex % 5 != skip5Mod:
-            print "Skipping image {} (skip5Mod = {})".format(imgIndex, skip5Mod)
-            continue
-        print "Parsing cntk output file, image %d of %d" % (imgIndex, len(imgPaths))
+    with open(cntkOutputPath) as fp:
+        for imgIndex in range(len(imgPaths)):
+            lines = [fp.readline() for _ in range(cntkNrRois)]
+            if skip5Mod != None and imgIndex % 5 != skip5Mod:
+                print "Skipping image {} (skip5Mod = {})".format(imgIndex, skip5Mod)
+                continue
+            print "Parsing cntk output file, image %d of %d" % (imgIndex, len(imgPaths))
 
-        # convert to floats
-        data = []
-        for line in lines:
-            values = np.fromstring(line, dtype=float, sep=" ")
-            assert len(values) == outputDim, "ERROR: expected dimension of {} but found {}".format(outputDim, len(values))
-            data.append(values)
+            # convert to floats
+            data = []
+            for line in lines:
+                values = np.fromstring(line, dtype=float, sep=" ")
+                assert len(values) == outputDim, "ERROR: expected dimension of {} but found {}".format(outputDim, len(values))
+                data.append(values)
 
-        # save
-        data = np.array(data, np.float32)
-        outPath = outParsedDir + str(imgIndex) + ".dat"
-        if saveCompressed:
-            np.savez_compressed(outPath, data)
-        else:
-            np.savez(outPath, data)
-    assert (dnnOutputAccessor.next() == "")
+            # save
+            data = np.array(data, np.float32)
+            outPath = outParsedDir + str(imgIndex) + ".dat"
+            if saveCompressed:
+                np.savez_compressed(outPath, data)
+            else:
+                np.savez(outPath, data)
+        assert (fp.readline() == "")  # test if end-of-file is reached
 
 
 #parse the cntk labels file and return the labels
@@ -376,33 +373,6 @@ def saveSvm(svmDir, experimentName, svmWeights, svmBias, featureScale):
     np.savetxt(svmFeatScalePath, featureScale)
 
 
-def imdbUpdateRoisWithHighGtOverlap(imdb, positivesGtOverlapThreshold):
-    addedPosCounter = 0
-    existingPosCounter = 0
-    for imgIndex in range(imdb.num_images):
-        for boxIndex, gtLabel in enumerate(imdb.roidb[imgIndex]['gt_classes']):
-            if gtLabel > 0:
-                existingPosCounter += 1
-            else:
-                overlaps = imdb.roidb[imgIndex]['gt_overlaps'][boxIndex, :].toarray()[0]
-                maxInd = np.argmax(overlaps)
-                maxOverlap = overlaps[maxInd]
-                if maxOverlap >= positivesGtOverlapThreshold and maxInd > 0:
-                    addedPosCounter += 1
-                    imdb.roidb[imgIndex]['gt_classes'][boxIndex] = maxInd
-    return existingPosCounter, addedPosCounter
-
-
-# def predict(classifier, imgIndex, cntkOutputIndividualFilesDir, roiSize, roiDim, svmWeights = None, svmBias = None, svmFeatScale = None, decisionThreshold = 0):
-#     if classifier == 'svm':
-#         labels, maxScores = svmPredict(imgIndex, cntkOutputIndividualFilesDir, svmWeights, svmBias, svmFeatScale, roiSize, roiDim, decisionThreshold)
-#     elif classifier == 'nn':
-#         labels, maxScores = nnPredict(imgIndex, cntkOutputIndividualFilesDir, roiSize, roiDim, decisionThreshold)
-#     else:
-#         error
-#     return labels, maxScores
-
-
 def svmPredict(imgIndex, cntkOutputIndividualFilesDir, svmWeights, svmBias, svmFeatScale, roiSize, roiDim, decisionThreshold = 0):
     cntkOutputPath = os.path.join(cntkOutputIndividualFilesDir,  str(imgIndex) + ".dat.npz")
     data = np.load(cntkOutputPath)['arr_0']
@@ -445,6 +415,23 @@ def nnPredict(imgIndex, cntkParsedOutputDir, roiSize, roiDim, decisionThreshold 
     return labels, maxScores
 
 
+def imdbUpdateRoisWithHighGtOverlap(imdb, positivesGtOverlapThreshold):
+    addedPosCounter = 0
+    existingPosCounter = 0
+    for imgIndex in range(imdb.num_images):
+        for boxIndex, gtLabel in enumerate(imdb.roidb[imgIndex]['gt_classes']):
+            if gtLabel > 0:
+                existingPosCounter += 1
+            else:
+                overlaps = imdb.roidb[imgIndex]['gt_overlaps'][boxIndex, :].toarray()[0]
+                maxInd = np.argmax(overlaps)
+                maxOverlap = overlaps[maxInd]
+                if maxOverlap >= positivesGtOverlapThreshold and maxInd > 0:
+                    addedPosCounter += 1
+                    imdb.roidb[imgIndex]['gt_classes'][boxIndex] = maxInd
+    return existingPosCounter, addedPosCounter
+
+
 
 
 ####################################
@@ -474,7 +461,7 @@ def visualizeResults(imgPath, roiLabels, roiScores, roiRelCoords, padWidth, padH
             if label == 0:
                 color = (255, 0, 0)
             else:
-                color = COLORS[label]
+                color = getColorsPalette()[label]
             rect = [int(scale * i) for i in roiRelCoords[roiIndex]]
 
             #draw in higher iterations only the detections
@@ -589,8 +576,343 @@ def im_detect(net, im, boxes, feature_scale=None, bboxIndices=None, boReturnClas
 
 
 ####################################
-# Random
+# Subset of helper library
+# used in the fastRCNN code
 ####################################
+import cv2, copy, textwrap
+from PIL import Image, ImageFont, ImageDraw
+from PIL.ExifTags import TAGS
 
+def makeDirectory(directory):
+    if not os.path.exists(directory):
+        os.makedirs(directory)
 
+def getFilesInDirectory(directory, postfix = ""):
+    fileNames = [s for s in os.listdir(directory) if not os.path.isdir(directory+"/"+s)]
+    if not postfix or postfix == "":
+        return fileNames
+    else:
+        return [s for s in fileNames if s.lower().endswith(postfix)]
 
+def readFile(inputFile):
+    #reading as binary, to avoid problems with end-of-text characters
+    #note that readlines() does not remove the line ending characters
+    with open(inputFile,'rb') as f:
+        lines = f.readlines()
+    return [removeLineEndCharacters(s) for s in lines]
+
+def readTable(inputFile, delimiter='\t', columnsToKeep=None):
+    lines = readFile(inputFile);
+    if columnsToKeep != None:
+        header = lines[0].split(delimiter)
+        columnsToKeepIndices = listFindItems(header, columnsToKeep)
+    else:
+        columnsToKeepIndices = None;
+    return splitStrings(lines, delimiter, columnsToKeepIndices)
+
+def getColumn(table, columnIndex):
+    column = [];
+    for row in table:
+        column.append(row[columnIndex])
+    return column
+
+def deleteFile(filePath):
+    if os.path.exists(filePath):
+        os.remove(filePath)
+
+def deleteAllFilesInDirectory(directory, fileEndswithString, boPromptUser = False):
+    if boPromptUser:
+        userInput = raw_input('--> INPUT: Press "y" to delete files in directory ' + directory + ": ")
+        if not (userInput.lower() == 'y' or userInput.lower() == 'yes'):
+            print "User input is %s: exiting now." % userInput
+            exit()
+    for filename in getFilesInDirectory(directory):
+        if fileEndswithString == None or filename.lower().endswith(fileEndswithString):
+            deleteFile(directory + "/" + filename)
+
+def removeLineEndCharacters(line):
+    if line.endswith('\r\n'):
+        return line[:-2]
+    elif line.endswith('\n'):
+        return line[:-1]
+    else:
+        return line
+
+def splitString(string, delimiter='\t', columnsToKeepIndices=None):
+    if string == None:
+        return None
+    items = string.split(delimiter)
+    if columnsToKeepIndices != None:
+        items = getColumns([items], columnsToKeepIndices)
+        items = items[0]
+    return items;
+
+def splitStrings(strings, delimiter, columnsToKeepIndices=None):
+    table = [splitString(string, delimiter, columnsToKeepIndices) for string in strings]
+    return table;
+
+def imread(imgPath, boThrowErrorIfExifRotationTagSet = True):
+    if not os.path.exists(imgPath):
+        "ERROR: image path does not exist."
+        error
+
+    rotation = rotationFromExifTag(imgPath)
+    if boThrowErrorIfExifRotationTagSet and rotation != 0:
+        print "Error: exif roation tag set, image needs to be rotated by %d degrees." % rotation
+    img = cv2.imread(imgPath)
+    if img is None:
+        print "ERROR: cannot load image " + imgPath
+        error
+    if rotation != 0:
+        img = imrotate(img, -90).copy()  # got this error occassionally without copy "TypeError: Layout of the output array img is incompatible with cv::Mat"
+    return img
+
+def rotationFromExifTag(imgPath):
+    TAGSinverted = {v: k for k, v in TAGS.items()}
+    orientationExifId = TAGSinverted['Orientation']
+    try:
+        imageExifTags = Image.open(imgPath)._getexif()
+    except:
+        imageExifTags = None
+
+    #rotate the image if orientation exif tag is present
+    rotation = 0
+    if imageExifTags != None and orientationExifId != None and orientationExifId in imageExifTags:
+        orientation = imageExifTags[orientationExifId]
+        #print "orientation = " + str(imageExifTags[orientationExifId])
+        if orientation == 1 or orientation == 0:
+            rotation = 0 #no need to do anything
+        elif orientation == 6:
+            rotation = -90
+        elif orientation == 8:
+            rotation = 90
+        else:
+            print "ERROR: orientation = " + str(orientation) + " not_supported!"
+            error
+    return rotation
+
+def imwrite(img, imgPath):
+    cv2.imwrite(imgPath, img)
+
+def imresize(img, scale, interpolation = cv2.INTER_LINEAR):
+    return cv2.resize(img, (0,0), fx=scale, fy=scale, interpolation=interpolation)
+
+def imresizeMaxDim(img, maxDim, boUpscale = False, interpolation = cv2.INTER_LINEAR):
+    scale = 1.0 * maxDim / max(img.shape[:2])
+    if scale < 1  or boUpscale:
+        img = imresize(img, scale, interpolation)
+    else:
+        scale = 1.0
+    return img, scale
+
+def imWidth(input):
+    return imWidthHeight(input)[0]
+
+def imHeight(input):
+    return imWidthHeight(input)[1]
+
+def imWidthHeight(input):
+    if type(input) is str or type(input) is unicode:
+        width, height = Image.open(input).size #this does not load the full image
+    else:
+        width =  input.shape[1]
+        height = input.shape[0]
+    return width,height
+
+def imshow(img, waitDuration=0, maxDim = None, windowName = 'img'):
+    if isinstance(img, basestring): #test if 'img' is a string
+        img = cv2.imread(img)
+    if maxDim is not None:
+        scaleVal = 1.0 * maxDim / max(img.shape[:2])
+        if scaleVal < 1:
+            img = imresize(img, scaleVal)
+    cv2.imshow(windowName, img)
+    cv2.waitKey(waitDuration)
+
+def drawRectangles(img, rects, color = (0, 255, 0), thickness = 2):
+    for rect in rects:
+        pt1 = tuple(ToIntegers(rect[0:2]))
+        pt2 = tuple(ToIntegers(rect[2:]))
+        cv2.rectangle(img, pt1, pt2, color, thickness)
+
+def drawText(img, pt, text, textWidth=None, color = (255,255,255), colorBackground = None, font = ImageFont.truetype("arial.ttf", 16)):
+    pilImg = imconvertCv2Pil(img)
+    pilImg = pilDrawText(pilImg,  pt, text, textWidth, color, colorBackground, font)
+    return imconvertPil2Cv(pilImg)
+
+def pilDrawText(pilImg, pt, text, textWidth=None, color = (255,255,255), colorBackground = None, font = ImageFont.truetype("arial.ttf", 16)):
+    textY = pt[1]
+    draw = ImageDraw.Draw(pilImg)
+    if textWidth == None:
+        lines = [text]
+    else:
+        lines = textwrap.wrap(text, width=textWidth)
+    for line in lines:
+        width, height = font.getsize(line)
+        if colorBackground != None:
+            draw.rectangle((pt[0], pt[1], pt[0] + width, pt[1] + height), fill=tuple(colorBackground[::-1]))
+        draw.text(pt, line, fill = tuple(color), font = font)
+        textY += height
+    return pilImg
+
+def getColorsPalette():
+    colors = [[255,0,0], [0,255,0], [0,0,255], [255,255,0], [255,0,255]]
+    for i in range(5):
+        for dim in range(0,3):
+            for s in (0.25, 0.5, 0.75):
+                if colors[i][dim] != 0:
+                    newColor = copy.deepcopy(colors[i])
+                    newColor[dim] = int(round(newColor[dim] * s))
+                    colors.append(newColor)
+    return colors
+
+def imconvertPil2Cv(pilImg):
+    rgb = pilImg.convert('RGB')
+    return np.array(rgb).copy()[:, :, ::-1]
+
+def imconvertCv2Pil(img):
+    cv2_im = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
+    return Image.fromarray(cv2_im)
+
+def ToIntegers(list1D):
+    return [int(float(x)) for x in list1D]
+
+#TODO: implement numerically stable softmax
+def softmax(vec):
+    expVec = np.exp(vec)
+    #hack
+    if max(expVec) == np.inf:
+        outVec = np.zeros(len(expVec))
+        outVec[expVec == np.inf] = vec[expVec == np.inf]
+        outVec = outVec / np.sum(outVec)
+    else:
+        outVec = expVec / np.sum(expVec)
+    return outVec
+
+def softmax2D(w):
+    e = np.exp(w)
+    dist = e / np.sum(e, axis=1)[:, np.newaxis]
+    return dist
+
+class Bbox:
+    MAX_VALID_DIM = 100000
+    left = top = right = bottom = None
+
+    def __init__(self, left, top, right, bottom):
+        self.left   = int(round(float(left)))
+        self.top    = int(round(float(top)))
+        self.right  = int(round(float(right)))
+        self.bottom = int(round(float(bottom)))
+        self.standardize()
+
+    def __str__(self):
+        return ("Bbox object: left = {0}, top = {1}, right = {2}, bottom = {3}".format(self.left, self.top, self.right, self.bottom))
+
+    def __repr__(self):
+        return str(self)
+
+    def rect(self):
+        return [self.left, self.top, self.right, self.bottom]
+
+    def max(self):
+        return max([self.left, self.top, self.right, self.bottom])
+
+    def min(self):
+        return min([self.left, self.top, self.right, self.bottom])
+
+    def width(self):
+        width  = self.right - self.left + 1
+        assert(width>=0)
+        return width
+
+    def height(self):
+        height = self.bottom - self.top + 1
+        assert(height>=0)
+        return height
+
+    def surfaceArea(self):
+        return self.width() * self.height()
+
+    def getOverlapBbox(self, bbox):
+        left1, top1, right1, bottom1 = self.rect()
+        left2, top2, right2, bottom2 = bbox.rect()
+        overlapLeft = max(left1, left2)
+        overlapTop = max(top1, top2)
+        overlapRight = min(right1, right2)
+        overlapBottom = min(bottom1, bottom2)
+        if (overlapLeft>overlapRight) or (overlapTop>overlapBottom):
+            return None
+        else:
+            return Bbox(overlapLeft, overlapTop, overlapRight, overlapBottom)
+
+    def standardize(self): #NOTE: every setter method should call standardize
+        leftNew   = min(self.left, self.right)
+        topNew    = min(self.top, self.bottom)
+        rightNew  = max(self.left, self.right)
+        bottomNew = max(self.top, self.bottom)
+        self.left = leftNew
+        self.top = topNew
+        self.right = rightNew
+        self.bottom = bottomNew
+
+    def isValid(self):
+        if self.left>=self.right or self.top>=self.bottom:
+            return False
+        if min(self.rect()) < -self.MAX_VALID_DIM or max(self.rect()) > self.MAX_VALID_DIM:
+            return False
+        return True
+
+def getEnclosingBbox(pts):
+    left = top = float('inf')
+    right = bottom = float('-inf')
+    for pt in pts:
+        left   = min(left,   pt[0])
+        top    = min(top,    pt[1])
+        right  = max(right,  pt[0])
+        bottom = max(bottom, pt[1])
+    return Bbox(left, top, right, bottom)
+
+def bboxComputeOverlapVoc(bbox1, bbox2):
+    surfaceRect1 = bbox1.surfaceArea()
+    surfaceRect2 = bbox2.surfaceArea()
+    overlapBbox = bbox1.getOverlapBbox(bbox2)
+    if overlapBbox == None:
+        return 0
+    else:
+        surfaceOverlap = overlapBbox.surfaceArea()
+        overlap = max(0, 1.0 * surfaceOverlap / (surfaceRect1 + surfaceRect2 - surfaceOverlap))
+        assert (overlap >= 0 and overlap <= 1)
+        return overlap
+
+def computeAveragePrecision(recalls, precisions, use_07_metric=False):
+    """ ap = voc_ap(recalls, precisions, [use_07_metric])
+    Compute VOC AP given precision and recall.
+    If use_07_metric is true, uses the
+    VOC 07 11 point method (default:False).
+    """
+    if use_07_metric:
+        # 11 point metric
+        ap = 0.
+        for t in np.arange(0., 1.1, 0.1):
+            if np.sum(recalls >= t) == 0:
+                p = 0
+            else:
+                p = np.max(precisions[recalls >= t])
+            ap = ap + p / 11.
+    else:
+        # correct AP calculation
+        # first append sentinel values at the end
+        mrecalls = np.concatenate(([0.], recalls, [1.]))
+        mprecisions = np.concatenate(([0.], precisions, [0.]))
+
+        # compute the precision envelope
+        for i in range(mprecisions.size - 1, 0, -1):
+            mprecisions[i - 1] = np.maximum(mprecisions[i - 1], mprecisions[i])
+
+        # to calculate area under PR curve, look for points
+        # where X axis (recall) changes value
+        i = np.where(mrecalls[1:] != mrecalls[:-1])[0]
+
+        # and sum (\Delta recall) * prec
+        ap = np.sum((mrecalls[i + 1] - mrecalls[i]) * mprecisions[i + 1])
+    return ap

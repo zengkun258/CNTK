@@ -275,7 +275,7 @@ class pascal_voc(imdb):
                                        dets[k, 2] + 1, dets[k, 3] + 1))
         return comp_id
 
-    def evaluate_detections(self, all_boxes, output_dir, boUsePythonImpl = False, use_07_metric = None):
+    def evaluate_detections(self, all_boxes, output_dir, boUsePythonImpl = True, use_07_metric = False):
         self._write_voc_results_file(all_boxes, output_dir)
         if not boUsePythonImpl:
             self._do_matlab_eval(comp_id, output_dir)

@@ -6,24 +6,12 @@
 # --------------------------------------------------------
 
 import sys, os
-sys.path.append('C:\Users\pabuehle\Desktop\PROJECTS\pythonLibrary')
-#from pabuehle_utilities_CV_v1 import *
-from cntk_helpers import readGtAnnotation
-from pabuehle_utilities_general_v0 import *
+from cntk_helpers import readGtAnnotation, computeAveragePrecision
 import scipy.sparse
 import scipy.io as sio
 import cPickle
 import numpy as np
 import fastRCNN
-#from fastRCNN import imdb
-#import fastRCNN.imdb as imdb
-#import fastRCNN
-#import imdb as imdb
-#import xml.dom.minidom as minidom
-#import utils.cython_bbox
-#import subprocess
-#import imdb
-#import fastRCNN.imdb as imdb
 
 
 class imdb_data(fastRCNN.imdb):
@@ -187,82 +175,73 @@ class imdb_data(fastRCNN.imdb):
                 'gt_overlaps' : overlaps,
                 'flipped' : False}
 
-
-
-
-
-#TODO: rename all_boxes to something more meaningful
-#TODO: change this function after re-writing 8_eval_map_vocImpl to be simpler
-    def evaluate_detections(self, all_boxes, output_dir, boUsePythonImpl=False, use_07_metric=None):
+    # main call to compute per-calass average precision
+    #   shape of all_boxes: e.g. 21 classes x 4952 images x 58 rois x 5 coords+score
+    #  (see also test_net() in fastRCNN\test.py)
+    def evaluate_detections(self, all_boxes, output_dir, use_07_metric=False):
         aps = []
-        for cls_ind, cls in enumerate(self._classes):
-            if cls != '__background__':
-                rec, prec, ap = self._voc_eval(cls_ind, all_boxes) #, 0.5, use_07_metric)
+        for classIndex, className in enumerate(self._classes):
+            if className != '__background__':
+                rec, prec, ap = self._evaluate_detections(classIndex, all_boxes, use_07_metric = use_07_metric)
                 aps += [ap]
-                print('AP for {:>15} = {:.4f}'.format(cls, ap))
+                print('AP for {:>15} = {:.4f}'.format(className, ap))
         print('Mean AP = {:.4f}'.format(np.nanmean(aps)))
 
-#TODO: rename variables
-    def _voc_eval(self, cls_ind, all_boxes, ovthresh=0.5, use_07_metric=False):
+    def _evaluate_detections(self, classIndex, all_boxes, overlapThreshold = 0.5, use_07_metric = False):
         """
         Top level function that does the PASCAL VOC evaluation.
 
-        classname: Category name (duh)
-        [ovthresh]: Overlap threshold (default = 0.5)
-        [use_07_metric]: Whether to use VOC07's 11 point AP computation
-            (default False)
+        [overlapThreshold]: Overlap threshold (default = 0.5)
+        [use_07_metric]: Whether to use VOC07's 11 point AP computation (default False)
         """
         assert (len(all_boxes) == self.num_classes)
         assert (len(all_boxes[0]) == self.num_images)
 
         # load ground truth annotations for this class
-        # npos = 0
-        gtInfo = []
+        gtInfos = []
         for imgIndex in range(self.num_images):
             imgPath = self.image_path_at(imgIndex)
             imgSubir  = os.path.normpath(imgPath).split(os.path.sep)[-2]
             if imgSubir != 'negative':
                 gtBoxes, gtLabels = readGtAnnotation(imgPath)
-                gtBoxes = [box for box, label in zip(gtBoxes, gtLabels) if label == self.classes[cls_ind]]
+                gtBoxes = [box for box, label in zip(gtBoxes, gtLabels) if label == self.classes[classIndex]]
             else:
                 gtBoxes = []
-            gtInfo.append({'bbox': np.array(gtBoxes),
+            gtInfos.append({'bbox': np.array(gtBoxes),
                            'difficult': [False] * len(gtBoxes),
                            'det': [False] * len(gtBoxes)})
 
         # parse detections for this class
-        # shape of all_boxes: e.g. 21 classes x 4952 images x 58 rois x 5 coord+score
-        detection_bboxInfo = []
-        detection_imageIndices = []
-        detection_confidence = []
+        # shape of all_boxes: e.g. 21 classes x 4952 images x 58 rois x 5 coords+score
+        detBboxes = []
+        detImgIndices = []
+        detConfidences = []
         for imgIndex in range(self.num_images):
-            dets = all_boxes[cls_ind][imgIndex]
+            dets = all_boxes[classIndex][imgIndex]
             if dets != []:
                 for k in xrange(dets.shape[0]):
-                    detection_imageIndices.append(imgIndex)
-                    detection_confidence.append(dets[k, -1])
+                    detImgIndices.append(imgIndex)
+                    detConfidences.append(dets[k, -1])
                     # the VOCdevkit expects 1-based indices
-                    detection_bboxInfo.append([dets[k, 0] + 1, dets[k, 1] + 1, dets[k, 2] + 1, dets[k, 3] + 1])
-        detection_bboxInfo = np.array(detection_bboxInfo)
-        detection_confidence = np.array(detection_confidence)
+                    detBboxes.append([dets[k, 0] + 1, dets[k, 1] + 1, dets[k, 2] + 1, dets[k, 3] + 1])
+        detBboxes = np.array(detBboxes)
+        detConfidences = np.array(detConfidences)
 
         # compute precision / recall / ap
-        # REMOVE npos
-        rec, prec, ap = self.voc_computePrecisionRecallAp(
-            class_recs=gtInfo,
-            confidence=detection_confidence,
-            image_ids=detection_imageIndices,
-            BB=detection_bboxInfo,
-            ovthresh=ovthresh,
+        rec, prec, ap = self._voc_computePrecisionRecallAp(
+            class_recs=gtInfos,
+            confidence=detConfidences,
+            image_ids=detImgIndices,
+            BB=detBboxes,
+            ovthresh=overlapThreshold,
             use_07_metric=use_07_metric)
         return rec, prec, ap
 
 
     #########################################################################
-    # Python evaluation functions (copied from faster-RCNN)
+    # Python evaluation functions (copied/refactored from faster-RCNN)
     ##########################################################################
-#TODO: change variable names, document, and move to helper functions
-    def voc_computePrecisionRecallAp(self, class_recs, confidence, image_ids, BB, ovthresh=0.5, use_07_metric=False):
+    def _voc_computePrecisionRecallAp(self, class_recs, confidence, image_ids, BB, ovthresh=0.5, use_07_metric=False):
         # sort by confidence
         sorted_ind = np.argsort(-confidence)
         BB = BB[sorted_ind, :]
@@ -280,7 +259,6 @@ class imdb_data(fastRCNN.imdb):
 
             if BBGT.size > 0:
                 # compute overlaps
-                # intersection
                 ixmin = np.maximum(BBGT[:, 0], bb[0])
                 iymin = np.maximum(BBGT[:, 1], bb[1])
                 ixmax = np.minimum(BBGT[:, 2], bb[2])
@@ -316,39 +294,5 @@ class imdb_data(fastRCNN.imdb):
         # avoid divide by zero in case the first detection matches a difficult
         # ground truth
         prec = tp / np.maximum(tp + fp, np.finfo(np.float64).eps)
-        ap = self.voc_computeAP(rec, prec, use_07_metric)
+        ap = computeAveragePrecision(rec, prec, use_07_metric)
         return rec, prec, ap
-
-#TODO: rename and move to helper functions
-    def voc_computeAP(self, rec, prec, use_07_metric=False):
-        """ ap = voc_ap(rec, prec, [use_07_metric])
-        Compute VOC AP given precision and recall.
-        If use_07_metric is true, uses the
-        VOC 07 11 point method (default:False).
-        """
-        if use_07_metric:
-            # 11 point metric
-            ap = 0.
-            for t in np.arange(0., 1.1, 0.1):
-                if np.sum(rec >= t) == 0:
-                    p = 0
-                else:
-                    p = np.max(prec[rec >= t])
-                ap = ap + p / 11.
-        else:
-            # correct AP calculation
-            # first append sentinel values at the end
-            mrec = np.concatenate(([0.], rec, [1.]))
-            mpre = np.concatenate(([0.], prec, [0.]))
-
-            # compute the precision envelope
-            for i in range(mpre.size - 1, 0, -1):
-                mpre[i - 1] = np.maximum(mpre[i - 1], mpre[i])
-
-            # to calculate area under PR curve, look for points
-            # where X axis (recall) changes value
-            i = np.where(mrec[1:] != mrec[:-1])[0]
-
-            # and sum (\Delta recall) * prec
-            ap = np.sum((mrec[i + 1] - mrec[i]) * mpre[i + 1])
-        return ap
