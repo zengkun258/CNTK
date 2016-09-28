@@ -44,7 +44,6 @@ def event_cv2GetRectangles(event, x, y, flags, param):
         cv2GetRectangle_global_bboxes.append(minPt + maxPt)
 #IS THIS HERE NEEDED???!!! ------------------------------------
     elif boLeftMouseDown:
-        sdf
         cv2.rectangle(imgCopy, cv2GetRectangle_global_leftButtonDownPoint, (x, y), (255, 255, 0), 1)
     else:
         drawCrossbar(imgCopy, (x, y))

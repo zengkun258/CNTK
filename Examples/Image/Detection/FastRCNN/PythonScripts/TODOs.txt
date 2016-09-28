@@ -1,11 +1,11 @@
 Code
 - remove non required libs from requirements.txt
 - make requirements.txt self contained (do not require precompiled wheels in repo)
-PATRICK:DONE - Add required utility functions into cntk helpers
+DONE - Add required utility functions into cntk helpers
 - Create new toy sample using pascal subset and 100 ROIs per image
 - pass NumRoi parameters to cntk.exe call (math in BS?)
 - Convert to python 3.4
-PATRICK:DONE - clean up code (Patrick knows TODOs)
+DONE - clean up code (Patrick knows TODOs)
 
 Discuss
 - data set setup (neg, pos, test) vs. (train, test)
