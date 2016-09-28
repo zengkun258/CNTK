@@ -1192,28 +1192,32 @@ private:
 template class CosDistanceWithNegativeSamplesNode<float>;
 template class CosDistanceWithNegativeSamplesNode<double>;
 
+template <class ElemType>
+void UpdateRunningAverage(ComputationNode<ElemType>& newInput, TensorView<ElemType>& runningAverage,
+                          size_t& runningCount);
+
 // -----------------------------------------------------------------------
-// AccumulatorNode calculates mean values of all samples used in forward pass.
+// EpochAccumulatorNode calculates mean values of all samples used in forward pass.
 // During training, mean sample value is calculated in each epoch. Value of the node will contain mean sample value of
 // its input node values since the beginning of epoch.
-// This node is useful for creating "per class" metrics like average class recall or mean intersection over union (mean 
+// This node is useful for creating "per class" metrics like average class recall or mean intersection over union (mean
 // IOU) which is standard metric in semantic labeling.
 // For mean IOU, we calculate ratio true_positives / (true_positives + false_negatives + false_positives) for all target
 // classes and then get mean of those values. true_positives, false_negatives, false_positives should be calculated over
 // the whole data set. Here we cannot calculate mean IOU per sample and then average the result. Instead, we use
-// AccumulatorNode to store those values over the whole data set.
+// EpochAccumulatorNode to store those values over the whole data set.
 // -----------------------------------------------------------------------
 template <class ElemType>
-class AccumulatorNode : public ComputationNodeNonLooping<ElemType>, public NumInputs<1>
+class EpochAccumulatorNode : public ComputationNodeNonLooping<ElemType>, public NumInputs<1>
 {
     typedef ComputationNodeNonLooping<ElemType> Base;
     UsingComputationNodeMembersBoilerplate;
-    static const std::wstring TypeName() { return L"Accumulator"; }
+    static const std::wstring TypeName() { return L"EpochAccumulator"; }
 
 public:
-    AccumulatorNode(DEVICEID_TYPE deviceId, const wstring& name);
+    EpochAccumulatorNode(DEVICEID_TYPE deviceId, const wstring& name);
 
-    AccumulatorNode(const ScriptableObjects::IConfigRecordPtr configp);
+    EpochAccumulatorNode(const ScriptableObjects::IConfigRecordPtr configp);
 
     virtual void BackpropToNonLooping(size_t inputIndex) override;
 
@@ -1241,4 +1245,5 @@ protected:
     shared_ptr<Matrix<ElemType>> m_accumulator;
     size_t m_numSamples;
 };
+
 }}}

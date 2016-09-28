@@ -53,17 +53,17 @@ Test module "NetworkTests" has passed with:
   4 test cases out of 4 passed
   11 assertions out of 11 passed
 
-  Test suite "AccumulatorNodeTestSuite" has passed with:
+  Test suite "EpochAccumulatorNodeTestSuite" has passed with:
     3 test cases out of 3 passed
     10 assertions out of 10 passed
 
-    Test case "AccumulatorNodeTestSuite/AccumulatorNodeForwardTest" has passed with:
+    Test case "EpochAccumulatorNodeTestSuite/EpochAccumulatorNodeForwardTest" has passed with:
       2 assertions out of 2 passed
 
-    Test case "AccumulatorNodeTestSuite/AccumulatorNodeMultipleForwardTest" has passed with:
+    Test case "EpochAccumulatorNodeTestSuite/EpochAccumulatorNodeMultipleForwardTest" has passed with:
       4 assertions out of 4 passed
 
-    Test case "AccumulatorNodeTestSuite/AccumulatorNodeMultipleForwardWithEpochResetTest" has passed with:
+    Test case "EpochAccumulatorNodeTestSuite/EpochAccumulatorNodeMultipleForwardWithEpochResetTest" has passed with:
       4 assertions out of 4 passed
 
   Test suite "NetworkTestSuite" has passed with:

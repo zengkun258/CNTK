@@ -19,12 +19,13 @@ const DEVICEID_TYPE c_deviceId = CPUDEVICE;
 
 static const float c_epsilonFloatE4 = 0.0001f;
 
-// Extends accumulator node to provide access to protected members.
+// Extends epoch accumulator node to provide access to protected members.
 template <class ElemType>
-class AccumulatorNodeTest : public AccumulatorNode<ElemType>
+class EpochAccumulatorNodeTest : public EpochAccumulatorNode<ElemType>
 {
 public:
-    AccumulatorNodeTest(DEVICEID_TYPE deviceId) : AccumulatorNode<ElemType>(deviceId, L"AccumulatorNodeTest")
+    EpochAccumulatorNodeTest(DEVICEID_TYPE deviceId)
+        : EpochAccumulatorNode<ElemType>(deviceId, L"EpochAccumulatorNodeTest")
     {
     }
 
@@ -62,10 +63,10 @@ private:
 };
 
 template <class ElemType>
-void AccumulatorNodeForwardTestImpl()
+void EpochAccumulatorNodeForwardTestImpl()
 {
     // Test that single forward propagation works.
-    auto accumulatorNode = make_shared<AccumulatorNodeTest<ElemType>>(c_deviceId);
+    auto accumulatorNode = make_shared<EpochAccumulatorNodeTest<ElemType>>(c_deviceId);
 
     const size_t minibatchSize = 4;
     const SmallVector<size_t> sampleDimensions{4};
@@ -81,10 +82,10 @@ void AccumulatorNodeForwardTestImpl()
 }
 
 template <class ElemType>
-void AccumulatorNodeMultipleForwardTestImpl()
+void EpochAccumulatorNodeMultipleForwardTestImpl()
 {
     // Test that single forward propagation works.
-    auto accumulatorNode = make_shared<AccumulatorNodeTest<ElemType>>(c_deviceId);
+    auto accumulatorNode = make_shared<EpochAccumulatorNodeTest<ElemType>>(c_deviceId);
     auto input = make_shared<DummyNodeTest<ElemType>>(c_deviceId, L"Input");
     accumulatorNode->AttachInputs({input});
 
@@ -117,10 +118,10 @@ void AccumulatorNodeMultipleForwardTestImpl()
 }
 
 template <class ElemType>
-void AccumulatorNodeMultipleForwardWithEpochResetTestImpl()
+void EpochAccumulatorNodeMultipleForwardWithEpochResetTestImpl()
 {
     // Test that multiple forward propagations with resetting accumulator work.
-    auto accumulatorNode = make_shared<AccumulatorNodeTest<ElemType>>(c_deviceId);
+    auto accumulatorNode = make_shared<EpochAccumulatorNodeTest<ElemType>>(c_deviceId);
     auto input = make_shared<DummyNodeTest<ElemType>>(c_deviceId, L"Input");
     accumulatorNode->AttachInputs({input});
 
@@ -153,24 +154,24 @@ void AccumulatorNodeMultipleForwardWithEpochResetTestImpl()
     }
 }
 
-BOOST_AUTO_TEST_SUITE(AccumulatorNodeTestSuite)
+BOOST_AUTO_TEST_SUITE(EpochAccumulatorNodeTestSuite)
 
-BOOST_AUTO_TEST_CASE(AccumulatorNodeForwardTest)
+BOOST_AUTO_TEST_CASE(EpochAccumulatorNodeForwardTest)
 {
-    AccumulatorNodeForwardTestImpl<float>();
-    AccumulatorNodeForwardTestImpl<double>();
+    EpochAccumulatorNodeForwardTestImpl<float>();
+    EpochAccumulatorNodeForwardTestImpl<double>();
 }
 
-BOOST_AUTO_TEST_CASE(AccumulatorNodeMultipleForwardTest)
+BOOST_AUTO_TEST_CASE(EpochAccumulatorNodeMultipleForwardTest)
 {
-    AccumulatorNodeMultipleForwardTestImpl<float>();
-    AccumulatorNodeMultipleForwardTestImpl<double>();
+    EpochAccumulatorNodeMultipleForwardTestImpl<float>();
+    EpochAccumulatorNodeMultipleForwardTestImpl<double>();
 }
 
-BOOST_AUTO_TEST_CASE(AccumulatorNodeMultipleForwardWithEpochResetTest)
+BOOST_AUTO_TEST_CASE(EpochAccumulatorNodeMultipleForwardWithEpochResetTest)
 {
-    AccumulatorNodeMultipleForwardWithEpochResetTestImpl<float>();
-    AccumulatorNodeMultipleForwardWithEpochResetTestImpl<double>();
+    EpochAccumulatorNodeMultipleForwardWithEpochResetTestImpl<float>();
+    EpochAccumulatorNodeMultipleForwardWithEpochResetTestImpl<double>();
 }
 
 BOOST_AUTO_TEST_SUITE_END()
