@@ -816,7 +816,8 @@ size_t SGD<ElemType>::TrainOneEpoch(ComputationNetworkPtr net,
                                     std::list<Matrix<ElemType>>& smoothedGradients, vector<double>& smoothedCounts,
                                     /*out*/ EpochCriterion& epochCriterion,
                                     /*out*/ std::vector<EpochCriterion>& epochEvalErrors,
-                                    const std::string& prefixMsg)
+                                    const std::string& prefixMsg,
+                                    const size_t maxNumberOfSamples /* = std::numeric_limits<size_t>().max()*/)
 {
     ScopedNetworkOperationMode modeGuard(net, NetworkOperationMode::training);
 
@@ -950,8 +951,20 @@ size_t SGD<ElemType>::TrainOneEpoch(ComputationNetworkPtr net,
         }
     }
 
+    // In case adaptive minibatch/learning rates are used, the training can be limited by the maxNumberOfSamples.
+    bool trainingFinished = false;
+    size_t epochStartSample = 0, epochCurrentSample = 0;
+    bool shouldCheckEarlyExit = maxNumberOfSamples != std::numeric_limits<size_t>().max();
+    if (shouldCheckEarlyExit)
+    {
+        // Some old readers do not implement GetCurrentSamplePosition()
+        // for those adaptive minibatch size is not supported. But they can be used for usual training.
+        epochStartSample = epochCurrentSample = trainSetDataReader->GetCurrentSamplePosition();
+    }
+
     bool noMoreSamplesToProcess = false;
     bool isFirstMinibatch = true;
+
     for (;;)
     {
         // Per-minibatch performance measurements; only enabled when perfTraceLevel > 0
@@ -967,7 +980,8 @@ size_t SGD<ElemType>::TrainOneEpoch(ComputationNetworkPtr net,
         size_t actualMBSize = 0;
         bool wasDataRead = DataReaderHelpers::GetMinibatchIntoNetwork<ElemType>(*trainSetDataReader, net, criterionNodes[0],
                                                                                 useDistributedMBReading, useParallelTrain, *inputMatrices, actualMBSize, m_mpi);
-        if (!wasDataRead && (!useDistributedMBReading || noMoreSamplesToProcess)) // in case of distributed reading, we do a few more loops until all ranks have completed
+        if (trainingFinished ||
+            !wasDataRead && (!useDistributedMBReading || noMoreSamplesToProcess)) // in case of distributed reading, we do a few more loops until all ranks have completed
             break;                                                                // end of epoch
 
         if (m_perfTraceLevel > 0)
@@ -1064,6 +1078,12 @@ size_t SGD<ElemType>::TrainOneEpoch(ComputationNetworkPtr net,
                 smbDispatcher.DoneWithCurrentMinibatch();
         } // if (actualMBSize > 0)
         // WARNING: If actualMBSize == 0, then criterion nodes have NOT been updated, and contain garbage (last MB's) values.
+
+        if (shouldCheckEarlyExit)
+        {
+            if (maxNumberOfSamples < trainSetDataReader->GetCurrentSamplePosition() - epochStartSample)
+                trainingFinished = true;
+        }
 
         if (m_perfTraceLevel > 0)
         {
@@ -1532,13 +1552,14 @@ double SGD<ElemType>::SearchForBestLearnRate(ComputationNetworkPtr net,
     EpochCriterion baseCriterion;
     vector<EpochCriterion> epochEvalErrors(evaluationNodes.size(), EpochCriterion::Infinity()); // these are ignored in this entire method
     TrainOneMiniEpochAndReloadModel(net, refNet, refNode, epochNumber,
-                                    numFramesToUseInSearch, trainSetDataReader, 0, m_mbSize[epochNumber],
+                                    m_epochSize, trainSetDataReader, 0, m_mbSize[epochNumber],
                                     featureNodes, labelNodes,
                                     criterionNodes, evaluationNodes,
                                     inputMatrices, learnableNodes,
                                     smoothedGradients, smoothedCounts,
                                     /*out*/ baseCriterion, /*out*/ epochEvalErrors,
-                                    "BaseAdaptiveLearnRateSearch:");
+                                    "BaseAdaptiveLearnRateSearch:",
+                                    numFramesToUseInSearch);
 
     if (m_autoLearnRateSearchType == LearningRateSearchAlgorithm::SearchBeforeEpoch)
     {
@@ -1559,13 +1580,14 @@ double SGD<ElemType>::SearchForBestLearnRate(ComputationNetworkPtr net,
     {
         learnRatePerSample *= 0.618;
         TrainOneMiniEpochAndReloadModel(net, refNet, refNode, epochNumber,
-                                        numFramesToUseInSearch, trainSetDataReader,
+                                        m_epochSize, trainSetDataReader,
                                         learnRatePerSample, m_mbSize[epochNumber], featureNodes,
                                         labelNodes, criterionNodes,
                                         evaluationNodes, inputMatrices,
                                         learnableNodes, smoothedGradients, smoothedCounts,
                                         /*out*/ epochCriterion, /*out*/ epochEvalErrors,
-                                        "AdaptiveLearnRateSearch:");
+                                        "AdaptiveLearnRateSearch:",
+                                        numFramesToUseInSearch);
     } while (epochCriterion.IsNan() || (epochCriterion.Average() > baseCriterion.Average() && learnRatePerSample > minLearnRate));
 
     bestLearnRatePerSample = learnRatePerSample;
@@ -1579,14 +1601,15 @@ double SGD<ElemType>::SearchForBestLearnRate(ComputationNetworkPtr net,
         EpochCriterion leftCriterion; // we compute this from the mini epoch
 
         TrainOneMiniEpochAndReloadModel(net, refNet, refNode, epochNumber,
-                                        numFramesToUseInSearch, trainSetDataReader,
+                                        m_epochSize, trainSetDataReader,
                                         leftLearnRatePerSample, m_mbSize[epochNumber],
                                         featureNodes, labelNodes,
                                         criterionNodes, evaluationNodes,
                                         inputMatrices, learnableNodes,
                                         smoothedGradients, smoothedCounts,
                                         /*out*/ leftCriterion, /*out*/ epochEvalErrors,
-                                        "DetailBaseAdaptiveLearnRateSearch:");
+                                        "DetailBaseAdaptiveLearnRateSearch:",
+                                        numFramesToUseInSearch);
 
         while (rightLearnRatePerSample > leftLearnRatePerSample * 1.2)
         {
@@ -1595,7 +1618,8 @@ double SGD<ElemType>::SearchForBestLearnRate(ComputationNetworkPtr net,
                 rightLearnRatePerSample *= 0.618;
 
                 TrainOneMiniEpochAndReloadModel(net, refNet, refNode,
-                                                epochNumber, numFramesToUseInSearch,
+                                                epochNumber, 
+                                                m_epochSize,
                                                 trainSetDataReader,
                                                 rightLearnRatePerSample, m_mbSize[epochNumber],
                                                 featureNodes, labelNodes,
@@ -1606,14 +1630,16 @@ double SGD<ElemType>::SearchForBestLearnRate(ComputationNetworkPtr net,
                                                 smoothedGradients, smoothedCounts,
                                                 /*out*/ rightCriterion,
                                                 /*out*/ epochEvalErrors,
-                                                "DetailRightAdaptiveLearnRateSearch:");
+                                                "DetailRightAdaptiveLearnRateSearch:",
+                                                numFramesToUseInSearch);
             }
             else
             {
                 leftLearnRatePerSample /= 0.618;
 
                 TrainOneMiniEpochAndReloadModel(net, refNet, refNode,
-                                                epochNumber, numFramesToUseInSearch,
+                                                epochNumber,
+                                                m_epochSize,
                                                 trainSetDataReader,
                                                 leftLearnRatePerSample, m_mbSize[epochNumber],
                                                 featureNodes, labelNodes,
@@ -1624,7 +1650,8 @@ double SGD<ElemType>::SearchForBestLearnRate(ComputationNetworkPtr net,
                                                 smoothedGradients, smoothedCounts,
                                                 /*out*/ leftCriterion,
                                                 /*out*/ epochEvalErrors,
-                                                "DetailLeftAdaptiveLearnRateSearch:");
+                                                "DetailLeftAdaptiveLearnRateSearch:",
+                                                numFramesToUseInSearch);
             }
         }
 
@@ -1797,13 +1824,14 @@ size_t SGD<ElemType>::SearchForBestMinibatchSize(ComputationNetworkPtr net,
         // Train on a few minibatches and so we can observe the epochCriterion as we try increasing
         // minibatches with iteration of this loop.
         TrainOneMiniEpochAndReloadModel(net, refNet, refNode, epochNumber,
-                                        numFramesToUseInSearch, trainSetDataReader,
+                                        m_epochSize, trainSetDataReader,
                                         learnRatePerSample, trialMinibatchSize, featureNodes,
                                         labelNodes, criterionNodes,
                                         evaluationNodes, inputMatrices,
                                         learnableNodes, smoothedGradients, smoothedCounts,
                                         /*out*/ epochCriterion, /*out*/ epochEvalErrors,
-                                        isFirstIteration ? "BaseAdaptiveMinibatchSearch:" : "AdaptiveMinibatchSearch:");
+                                        isFirstIteration ? "BaseAdaptiveMinibatchSearch:" : "AdaptiveMinibatchSearch:",
+                                        numFramesToUseInSearch);
 
         if (isFirstIteration)
         {
@@ -1865,14 +1893,15 @@ void SGD<ElemType>::TrainOneMiniEpochAndReloadModel(ComputationNetworkPtr net,
                                                     std::list<Matrix<ElemType>>& smoothedGradients, vector<double> smoothedCounts,
                                                     /*out*/ EpochCriterion& epochCriterion,
                                                     /*out*/ std::vector<EpochCriterion>& epochEvalErrors,
-                                                    std::string prefixMsg)
+                                                    std::string prefixMsg,
+                                                    const size_t maxNumOfSamples)
 {
     TrainOneEpoch(net, refNet, refNode, epochNumber, epochSize,
                   trainSetDataReader, learnRatePerSample, minibatchSize, featureNodes,
                   labelNodes, criterionNodes, evaluationNodes,
                   inputMatrices, learnableNodes, smoothedGradients, smoothedCounts,
                   /*out*/ epochCriterion, /*out*/ epochEvalErrors,
-                  "  " + prefixMsg); // indent log msg by 2 (that is 1 more than the Finished message below)
+                  "  " + prefixMsg, maxNumOfSamples); // indent log msg by 2 (that is 1 more than the Finished message below)
 
     LOGPRINTF(stderr, " Finished Mini-Epoch[%d]: ", (int)epochNumber+1);
     epochCriterion.LogCriterion(criterionNodes[0]->NodeName());
