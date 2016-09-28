@@ -1,193 +1,118 @@
 import os, sys, importlib, shutil
-import PARAMETERS
-locals().update(importlib.import_module("PARAMETERS").__dict__)
-
+from cntk_helpers import *
 
 
 ####################################
 # Parameters
 ####################################
-imagesToAnnotateDir = "C:/Users/pabuehle/Desktop/newImgs/"
-#imagesToAnnotateDir = imgDir + "positive/"
+imgDir = "C:/Users/pabuehle/Desktop/newImgs/"
 
 #no need to change these params
-drawingMaxImgSize = 1000.0
-annotationsFile = resultsDir + "annotations.tsv"
-minNrPixels = -1
+drawingImgSize = 1000.0
+
 
 
 ####################################
 # Functions
 ####################################
-def event_cv2GetRectangles(event, x, y, flags, param):
-    global cv2GetRectangle_global_bboxes
-    global cv2GetRectangle_global_leftButtonDownPoint
-    boLeftMouseDown = flags == cv2.EVENT_FLAG_LBUTTON
+def event_cv2_drawRectangles(event, x, y, flags, param):
+    global global_image
+    global global_bboxes
+    global global_leftButtonDownPoint
 
-    #draw all previous bounding boxes
-    imgCopy = image.copy()
-    drawRectangles(imgCopy, cv2GetRectangle_global_bboxes)
-    if len(cv2GetRectangle_global_bboxes)>0:
-        drawRectangles(imgCopy, [cv2GetRectangle_global_bboxes[-1]], color = (255, 0, 0))
+    #draw all previous bounding boxes, and the most
+    #recent box in a different color
+    imgCopy = global_image.copy()
+    drawRectangles(imgCopy, global_bboxes)
+    if len(global_bboxes)>0:
+        drawRectangles(imgCopy, [global_bboxes[-1]], color = (255, 0, 0))
 
-    #handle mouse clicks
+    #handle mouse events
     if event == cv2.EVENT_LBUTTONDOWN:
-        cv2GetRectangle_global_leftButtonDownPoint = (x, y)
+        global_leftButtonDownPoint = (x, y)
+
     elif event == cv2.EVENT_LBUTTONUP:
-        pt1 = cv2GetRectangle_global_leftButtonDownPoint
+        pt1 = global_leftButtonDownPoint
         pt2 = (x, y)
         minPt = (min(pt1[0], pt2[0]), min(pt1[1], pt2[1]))
         maxPt = (max(pt1[0], pt2[0]), max(pt1[1], pt2[1]))
-        imgWidth, imgHeight = imWidthHeight(image)
+        imgWidth, imgHeight = imWidthHeight(global_image)
         minPt = ptClip(minPt, imgWidth, imgHeight)
         maxPt = ptClip(maxPt, imgWidth, imgHeight)
-        cv2GetRectangle_global_bboxes.append(minPt + maxPt)
-#IS THIS HERE NEEDED???!!! ------------------------------------
-    elif boLeftMouseDown:
-        cv2.rectangle(imgCopy, cv2GetRectangle_global_leftButtonDownPoint, (x, y), (255, 255, 0), 1)
+        global_bboxes.append(minPt + maxPt)
+
+    elif flags == cv2.EVENT_FLAG_LBUTTON: #if left mouse button is held down
+        cv2.rectangle(imgCopy, global_leftButtonDownPoint, (x, y), (255, 255, 0), 1)
+
     else:
         drawCrossbar(imgCopy, (x, y))
-    cv2.imshow("image", imgCopy)
+    cv2.imshow("AnnotationWindow", imgCopy)
 
-
-def procBoundingBoxes(rectsIn, imageUnscaled, scaleFactor):
+def scaleCropBboxes(rectsIn, scaleFactor, imgWidth, imgHeight):
     if len(rectsIn) <= 0:
         return rectsIn
     else:
-        rects = copy.deepcopy(rectsIn)
-        for index in range(len(rects)):
-            for i in range(4):
-                rects[index][i] = int(round(rects[index][i] / scaleFactor))
-        imgWidth, imgHeight = imWidthHeight(imageUnscaled)
-        bboxes = [Bbox(*rect) for rect in rects]
-        for bbox in bboxes:
-            bbox.crop(imgWidth, imgHeight)
-            assert(bbox.isValid())
-        return [bbox.rect() for bbox in bboxes]
-
+        rects = [ [int(round(rect[i]/scaleFactor)) for i in range(4)]
+                  for rect in rectsIn]
+        rects = [Bbox(*rect).crop(imgWidth, imgHeight).rect() for rect in rects]
+        for rect in rects:
+            assert (Bbox(*rect).isValid())
+        return rects
 
 
 
 ####################################
 # Main
 ####################################
-makeDirectory(resultsDir)
-imgFilenames = [f for f in os.listdir(imagesToAnnotateDir) if f.lower().endswith(".jpg")]
-
-print "Using annotations file: " + annotationsFile
-if annotationsFile and os.path.exists(annotationsFile):
-    shutil.copyfile(annotationsFile, annotationsFile + ".backup.tsv")
-    data = readTable(annotationsFile)
-    annotationsLUT = getDictionary(getColumn(data,0), getColumn(data,1), False)
-else:
-    annotationsLUT = dict()
-
-
-#delete corrupted image files
-# if False:
-#     imgPathsCorrupted = []
-#     for imgFilename in imgFilenames:
-#         imgPath = imagesToAnnotateDir + imgFilename
-#         try:
-#             getImageFileWidthHeight(imgPath)
-#             cv2.imread(imgPath)
-#         except:
-#             print "WARNING: image corrupted: " + imgPath
-#             imgPathsCorrupted.append(imgPath)
-#     if len(imgPathsCorrupted)<50:
-#         for imgPath in imgPathsCorrupted:
-#             print "Delete corrupted image: " + imgPath
-#             deleteFile(imgPath)
-#     EXIT
-
+imgFilenames = [f for f in os.listdir(imgDir) if f.lower().endswith(".jpg")]
 
 #loop over each image and get annotation
 for imgFilenameIndex,imgFilename in enumerate(imgFilenames):
-    print imgFilenameIndex,imgFilename
-    imgPath = imagesToAnnotateDir + imgFilename
-    print "Processing image {0} of {1}: {2}".format(imgFilenameIndex, len(imgFilenames), imgPath)
+    print imgFilenameIndex, imgFilename
+    imgPath = os.path.join(imgDir, imgFilename)
     bBoxPath = imgPath[:-4] + ".bboxes.tsv"
 
-    #compute scale factor
-    imgWidth, imgHeight = imWidthHeight(imgPath)
-    scaleFactor = min(1, drawingMaxImgSize / max(imgWidth, imgHeight))
-    if imgWidth * imgHeight < minNrPixels:
-        print "Low resolution ({0},{1}) hence skipping image: {2}.".format(imgWidth, imgHeight, imgPath)
-        continue
-
-    #load existing ground truth if provided
-    cv2GetRectangle_global_bboxes = []
+    #skip image if ground truth already exists
     if os.path.exists(bBoxPath):
-        print "Skipping image since ground truth already exists: %s." % imgPath
+        print "Skipping image {0} since ground truth already exists".format(imgFilename)
         continue
-        # print "Loading ground truth from individual file: " + bBoxPath
-        # bboxes = readTable(bBoxPath)
-        # for index in range(len(bboxes)):
-        #     bboxes[index] = ToFloats(bboxes[index])
-        #     for i in range(4):
-        #         bboxes[index][i] = bboxes[index][i] * scaleFactor
-        # cv2GetRectangle_global_bboxes = bboxes
-        # print cv2GetRectangle_global_bboxes
+    else:
+        print "Processing image {0} of {1}: {2}".format(imgFilenameIndex, len(imgFilenames), imgPath)
 
-    elif imgPath in annotationsLUT:
-        print "Using ground truth from LUT file."
-        existingAnnotationString = annotationsLUT[imgPath]
-        if existingAnnotationString == "skip":
-            print "Skipping since previously marked as 'skip': %s." % imgPath
-            continue
-        else:
-            bboxes = eval(existingAnnotationString)
-            for index in range(len(bboxes)):
-                bboxes[index] = ToFloats(bboxes[index])
-                for i in range(4):
-                    bboxes[index][i] = bboxes[index][i] * scaleFactor
-            cv2GetRectangle_global_bboxes = bboxes
+    #prepare image window and callback
+    global_bboxes = []
+    global_image, scaleFactor = imresizeMaxDim(imread(imgPath), drawingImgSize)
+    cv2.namedWindow("AnnotationWindow")
+    cv2.setMouseCallback("AnnotationWindow", event_cv2_drawRectangles)
+    cv2.imshow("AnnotationWindow", global_image)
 
-
-    #draw image
-    imageUnscaled = imread(imgPath)
-    image = imresize(imageUnscaled, scaleFactor)
-    cv2.namedWindow("image")
-    cv2.setMouseCallback("image", event_cv2GetRectangles)
-    imgCopy = image.copy()
-    drawRectangles(imgCopy, cv2GetRectangle_global_bboxes)
-    cv2.imshow("image", imgCopy)
-
-
-    #wait for user input
+    #process user input
     while True:
-        key = unichr(cv2.waitKey()) #& 0xFF
+        key = unichr(cv2.waitKey())
 
-        #skip
-        if key == "s":
+        #undo/remove last rectangle
+        if key == "u":
+            if len(global_bboxes) >= 1:
+                global_bboxes = global_bboxes[:-1]
+                imgCopy = global_image.copy()
+                drawRectangles(imgCopy, global_bboxes)
+                cv2.imshow("AnnotationWindow", imgCopy)
+
+        #skip image
+        elif key == "s":
             if os.path.exists(bBoxPath):
                 print "Skipping image hence deleting existing bbox file: " + bBoxPath
                 os.remove(bBoxPath)
-            annotationsLUT[imgPath] = "skip"
-            if annotationsFile:
-                writeTable(annotationsFile, sortDictionary(annotationsLUT))
             break
-
-        #undo
-        if key == "u":
-            if len(cv2GetRectangle_global_bboxes) >= 1:
-                cv2GetRectangle_global_bboxes = cv2GetRectangle_global_bboxes[:-1]
-                imgCopy = image.copy()
-                drawRectangles(imgCopy, cv2GetRectangle_global_bboxes)
-                cv2.imshow("image", imgCopy)
 
         #next image
         elif key == "n":
-            bboxes = procBoundingBoxes(cv2GetRectangle_global_bboxes, imageUnscaled, scaleFactor)
+            bboxes = scaleCropBboxes(global_bboxes, scaleFactor, imWidth(imgPath), imHeight(imgPath))
             writeTable(bBoxPath, bboxes)
-            annotationsLUT[imgPath] = bboxes
-            if annotationsFile:
-                writeTable(annotationsFile, sortDictionary(annotationsLUT))
             break
 
         #quit
         elif key == "q":
             sys.exit()
-
 
 cv2.destroyAllWindows()

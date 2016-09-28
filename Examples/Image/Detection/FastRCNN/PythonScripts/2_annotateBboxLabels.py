@@ -1,42 +1,35 @@
 # -*- coding: utf-8 -*-
-import cv2, os, sys, time, importlib
 from Tkinter import *
 from PIL import ImageTk
-import PARAMETERS
-locals().update(importlib.import_module("PARAMETERS").__dict__)
+from cntk_helpers import *
 
 
 ####################################
 # Parameters
 ####################################
 imgDir = "C:/Users/pabuehle/Desktop/newImgs/"
+classes = ("avocado", "orange", "butter", "champagne", "cheese", "eggBox", "gerkin", "joghurt", "ketchup",
+           "orangeJuice", "onion", "pepper", "sausage", "tomato", "water", "apple", "milk",
+           "tabasco", "soySauce", "mustard", "beer")
 
 #no need to change these
+drawingImgSize = 1000
 boxWidth = 10
 boxHeight = 2
-drawingMaxImgSize = 1000
-objectNames = classes[1:]
-objectNames = np.sort(objectNames).tolist()
-objectNames += ["UNDECIDED", "EXCLUDE"]
-
-
-
-
-####################################
-# Helper functions
-####################################
-def buttonPressedCallback(s):
-    global tkLastButtonPressed
-    global tkBoButtonPressed
-    tkLastButtonPressed = s
-    tkBoButtonPressed = True
 
 
 
 ####################################
 # Main
 ####################################
+#define callback function for tk button
+def buttonPressedCallback(s):
+    global global_lastButtonPressed
+    global_lastButtonPressed = s
+
 #create UI
+objectNames = np.sort(classes).tolist()
+objectNames += ["UNDECIDED", "EXCLUDE"]
 tk = Tk()
 w = Canvas(tk, width=len(objectNames) * boxWidth, height=len(objectNames) * boxHeight, bd = boxWidth, bg = 'white')
 w.grid(row = len(objectNames), column = 0, columnspan = 2)
@@ -49,17 +42,15 @@ for objectIndex,objectName in enumerate(objectNames):
 imgFilenames = getFilesInDirectory(imgDir, ".jpg")
 for imgIndex, imgFilename in enumerate(imgFilenames):
     print imgIndex, imgFilename
-    labelsPath = imgDir + "/" + imgFilename[:-4] + ".bboxes.labels.tsv"
+    labelsPath = os.path.join(imgDir, imgFilename[:-4] + ".bboxes.labels.tsv")
     if os.path.exists(labelsPath):
+        print "Skipping image {:3} ({}) since annotation file already exists: {}".format(imgIndex, imgFilename, labelsPath)
         continue
 
-    #load image and bboxes
-    imgPath = imgDir + "/" + imgFilename
-    print imgIndex, imgPath
-    img = imread(imgPath)
-    rectsPath = imgPath = imgDir + "/" + imgFilename[:-4] + ".bboxes.tsv"
-    rects = readTable(rectsPath)
-    rects = [ToIntegers(rect) for rect in rects]
+    #load image and ground truth rectangles
+    img = imread(os.path.join(imgDir,imgFilename))
+    rectsPath = os.path.join(imgDir, imgFilename[:-4] + ".bboxes.tsv")
+    rects = [ToIntegers(rect) for rect in readTable(rectsPath)]
 
     #annotate each rectangle in turn
     labels = []
@@ -68,24 +59,22 @@ for imgIndex, imgFilename in enumerate(imgFilenames):
         drawRectangles(imgCopy, [rect], thickness = 15)
 
         #draw image in tk window
-        imgTk, _ = imresizeMaxDim(imgCopy, drawingMaxImgSize)
-        imgTk = imconvertCv2Pil(imgTk)
-        imgTk = ImageTk.PhotoImage(imgTk)
+        imgTk, _ = imresizeMaxDim(imgCopy, drawingImgSize, boUpscale = True)
+        imgTk = ImageTk.PhotoImage(imconvertCv2Pil(imgTk))
         label = Label(tk, image=imgTk)
-        label.grid(row=0, column=1, rowspan=drawingMaxImgSize)
+        label.grid(row=0, column=1, rowspan=drawingImgSize)
         tk.update_idletasks()
         tk.update()
 
         #busy-wait until button pressed
-        tkBoButtonPressed = False
-        tkLastButtonPressed = None
-        while not tkBoButtonPressed:
+        global_lastButtonPressed = None
+        while not global_lastButtonPressed:
             tk.update_idletasks()
             tk.update()
 
         #store result
-        print "tkLastButtonPressed", tkLastButtonPressed
-        labels.append(tkLastButtonPressed)
+        print "Button pressed = ", global_lastButtonPressed
+        labels.append(global_lastButtonPressed)
 
     writeFile(labelsPath, labels)
 tk.destroy()
