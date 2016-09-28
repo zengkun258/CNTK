@@ -9,17 +9,17 @@
 
 namespace Microsoft { namespace MSR { namespace CNTK {
 
-std::unordered_map<DEVICEID_TYPE, BufferManager*> BufferManager::m_instances;
+std::unordered_map<DEVICEID_TYPE, std::unique_ptr<BufferManagement>> BufferManagement::m_instances;
 
 template <>
-std::multimap<size_t, float*>& BufferManager::BufferContainor<float>() { return m_bufferFloatContainor; }
+std::multimap<size_t, float*>& BufferManagement::BufferContainer<float>() { return m_bufferFloatContainer; }
 template <>
-std::multimap<size_t, double*>& BufferManager::BufferContainor<double>() { return m_bufferDoubleContainor; }
+std::multimap<size_t, double*>& BufferManagement::BufferContainer<double>() { return m_bufferDoubleContainer; }
 template <>
-std::multimap<size_t, char*>& BufferManager::BufferContainor<char>() { return m_bufferCharContainor; }
+std::multimap<size_t, char*>& BufferManagement::BufferContainer<char>() { return m_bufferCharContainer; }
 template <>
-std::multimap<size_t, short*>& BufferManager::BufferContainor<short>() { return m_bufferShortContainor; }
+std::multimap<size_t, short*>& BufferManagement::BufferContainer<short>() { return m_bufferShortContainer; }
+template <>
+std::multimap<size_t, int*>& BufferManagement::BufferContainer<int>() { return m_bufferIntContainer; }
 
-}
-}
-}
+}}}

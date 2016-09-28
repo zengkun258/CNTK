@@ -235,12 +235,7 @@ public:
 
     // Resize first checks to ensure that the caller has the authority to call Resize (i.e., it checks to ensure the underlying data is owned by only this matrix), and then
     // actually resizes the underlying matrix, doing any allocation as required.
-    void Resize(const size_t numRows, const size_t numCols, bool growOnly = true); // by default we only reallocate if need to grow
-
-    // actually resizes the underlying matrix in/out of matrix pool
-    // the request and release operation in CachedResize links to memory manager directly, so, it's just logically operation.
-    // However, Resize and CachedResize have same implementation for used.
-    void CachedResize(const size_t numRows, const size_t numCols, bool growOnly = false); // by default we reallocate whether need to grow or not, since its logically operation
+    void Resize(const size_t numRows, const size_t numCols, bool growOnly = true, bool cachedResize = false); // by default we only reallocate if need to grow
 
     ElemType&       operator()(const size_t /*row*/, const size_t /*col*/)       { LogicError("GPUMatrix doesn't support operator(,) on the CPU."); }
     const ElemType& operator()(const size_t /*row*/, const size_t /*col*/) const { LogicError("GPUMatrix doesn't support operator(,) on the CPU."); }

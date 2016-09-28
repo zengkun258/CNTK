@@ -210,73 +210,61 @@ enum MatrixFlags
 
 
 // -----------------------------------------------------------------------
-// BufferManager -- to controal all buffer allocation
-// Why it be here?
-// The best way to save memory is to release the memory no-longer used in future. However, 
-// repeatly request and release memory will cost times extra training time. The memory manager 
-// is a tradeoff. We can do release the memory immediately, however, we just put them to a pool.
-// While the request is coming, if the condition allows, just picking the memory from the pool. 
-// In practice, it will save another 30% memory based on sharedNodeMatrices
-// What is the mechianism?
-// A singleton is used here to make sure the buffer manager is unique.
-// Four methods are provided here:
-// RequestBuffer: request a memory block, if the manager finds a proper block in pool, it will 
-// give the handle of the memory. Otherwise, physically resquest a new memory.
-// LogicalReleaseBuffer: release a buffer into the pool
-// PhysicalReleaseBuffer: call the free function and release the memory physically
-// PhysicalReleaseAllBuffer: in some special case, we want to clear the memory in pool, this 
-// method will force realsing all the memory managed by manager
+// BufferManagement -- to control the allocation and release of memory
+// 
+// 1. The goal of buffer management
+// The best way to save memory is releasing memory right after no longer used in the rest of the mini-batch, which makes 
+// the extra cost on memory operation and slows down the speed. An option to solve that is building the static link between 
+// all nodes in pre-computing process and making memory re-use in the runtime, known as shared node value matrices in CNTK. 
+// The other option is using a buffer pool to take over the allocation and release request. Whereas the physical operation on 
+// memory, logical operation will make nearly no cost on allocation or release. Since the second option, achieved as 
+// BufferManagement below, could control all the memory operation, including some trivial ones, like the workspace in convolutions, 
+// and more flexible, allocating based on size and being easy to implement new algorithm, it is usually more powerful than the
+// first method.
+// 2. How it works?
+// First, it should be called in Resize function. In Resize function, using Request and LogicalReleaseFunction to replace the original 
+// request and release functions. Since BufferManagement is singleton for deviceId, just call the GetManagementInstance. And in Resize, 
+// there is a flag named growthOnly, which will request only the size increases to save the allocation cost. In the case, since the 
+// buffer pool, nearly no cost on allocation, the growth only will be disable in BufferManagement mode.
 // -----------------------------------------------------------------------
-class BufferManager
+class BufferManagement
 {
 private:
-    BufferManager() = default;
-    ~BufferManager() 
-    {
-        for (auto &iter : m_instances) 
-        {
-            delete iter.second;
-            iter.second = nullptr;
-        }
-        m_instances.clear();
-    }
+    BufferManagement() = default;
 	
     // Disable all the copy & move functions to keep the instance safely
-    BufferManager(const BufferManager&) = delete;
-    BufferManager(BufferManager&&) = delete;
-    BufferManager& operator= (const BufferManager &) = delete;
-    BufferManager& operator= (BufferManager &&) = delete;
+    DISABLE_COPY_AND_MOVE(BufferManagement);
 
 public:
-    static BufferManager* GetManagerInstance(DEVICEID_TYPE deviceId)
+    static BufferManagement& GetManagerInstance(DEVICEID_TYPE deviceId)
     {
         auto instance = m_instances.find(deviceId);
         // BUGBUG: don't consider thread safe here, should we?
         if (instance == m_instances.end()) 
         {
-            instance = m_instances.insert(std::pair<DEVICEID_TYPE, BufferManager*>
-                (deviceId, new BufferManager())).first;
+            instance = m_instances.insert(std::make_pair(deviceId, std::unique_ptr<BufferManagement>(
+                new BufferManagement()))).first;
             instance->second->m_deviceId = deviceId;
             instance->second->m_totalManageSize = 0;
             instance->second->m_totalAllocSize = 0;
         }
-        return instance->second;
+        return *(instance->second);
     }
 
-    // Request buffer from the buffer pool, or re-allocate a new memory
+    // for requesting, find in buffer container first, if failed, allocate a new one
     template<class ElemType>
     ElemType* RequestBuffer(size_t size)
     {
         ElemType* bufferPtr = nullptr;
-        auto& bufferContainor = BufferContainor<ElemType>();
+        auto& bufferContainer = BufferContainer<ElemType>();
 
-        auto bufferHint = bufferContainor.lower_bound(size);
-
-        if (bufferHint != bufferContainor.end() && bufferHint->first < size * MEM_MAX_LIMIT_TIMES) 
+        // simply allocating based on size, more efficient and complex algorithm could be implemented here
+        auto bufferHint = bufferContainer.lower_bound(size);
+        if (bufferHint != bufferContainer.end() && bufferHint->first < size * MEM_MAX_LIMIT_TIMES) 
         {
             bufferPtr = bufferHint->second;
             m_totalManageSize -= bufferHint->first;
-            bufferContainor.erase(bufferHint);
+            bufferContainer.erase(bufferHint);
             return bufferPtr;
         }
 
@@ -301,16 +289,16 @@ public:
         return bufferPtr;
     }
 
-    // Release targeting buffer into buffer pool
+    // insert the header of buffer into the buffer container
     template<class ElemType>
     void LogicalReleaseBuffer(ElemType* buffer, size_t size)
     {
-        auto& bufferContainor = BufferContainor<ElemType>();
-        bufferContainor.insert(std::pair<size_t, ElemType*>(size, buffer));
+        auto& bufferContainer = BufferContainer<ElemType>();
+        bufferContainer.insert(std::make_pair(size, buffer));
         m_totalManageSize += size;
     }
 
-    // Release targeting buffer in buffer pool
+    // physical release the buffer
     template<class ElemType>
     void PhysicalReleaseBuffer(ElemType* buffer)
     {
@@ -325,34 +313,35 @@ public:
         }
     }
 
-    // Release all buffer cache in buffer pool
+    // empty all the cached buffer
     template<class ElemType>
     void PhysicalReleaseAllBuffer()
     {
-        auto& bufferContainor = BufferContainor<ElemType>();
+        auto& bufferContainer = BufferContainer<ElemType>();
 
-        for (auto& iter : bufferContainor) 
+        for (auto& iter : bufferContainer) 
         {
             PhysicalReleaseBuffer<ElemType>(iter.second);
         }
 
-        bufferContainor.clear();
+        bufferContainer.clear();
     }
 
 private:
-    static std::unordered_map<DEVICEID_TYPE, BufferManager*> m_instances;
+    static std::unordered_map<DEVICEID_TYPE, std::unique_ptr<BufferManagement>> m_instances;
 
     template <class ElemType>
-    std::multimap<size_t, ElemType*>& BufferContainor();
+    std::multimap<size_t, ElemType*>& BufferContainer();
     DEVICEID_TYPE m_deviceId;
     size_t m_totalManageSize;
     size_t m_totalAllocSize;
 
     // map to store all the temp buffer handle
-    std::multimap<size_t, float*> m_bufferFloatContainor;
-    std::multimap<size_t, double*> m_bufferDoubleContainor;
-    std::multimap<size_t, char*> m_bufferCharContainor;
-    std::multimap<size_t, short*> m_bufferShortContainor;
+    std::multimap<size_t, float*> m_bufferFloatContainer;
+    std::multimap<size_t, double*> m_bufferDoubleContainer;
+    std::multimap<size_t, char*> m_bufferCharContainer;
+    std::multimap<size_t, short*> m_bufferShortContainer;
+    std::multimap<size_t, int*> m_bufferIntContainer;
 };
 
 
