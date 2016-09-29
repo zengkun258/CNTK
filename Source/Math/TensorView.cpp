@@ -290,31 +290,6 @@ void TensorView<ElemType>::DoTernaryOpOf(ElemType beta, const TensorView& a, con
     GetSOB().TensorOp(beta, a.GetSOB(), b.GetSOB(), c.GetSOB(), alpha, op, reductionOp, offsets, regularOpDims, regularStrides, reducingOpDims, reducingStrides);
 }
 
-// -------------------------------------------------------------------
-// matrix product -- GEMM for flattened tensors
-// -------------------------------------------------------------------
-
-// print the dimensions of a matrix-product operation, for pretty error reporting
-static string MatrixProductFormat(const TensorShape& shapeA, bool transA, const TensorShape& shapeB, bool transB, const TensorShape& shapeC, bool transC)
-{
-    string result = "[" + string(shapeA) + "]"; if (transA) result.append("'");
-    result += " * ";
-    result +=       "[" + string(shapeB) + "]"; if (transB) result.append("'");
-    result += " -> ";
-    result +=       "[" + string(shapeC) + "]"; if (transC) result.append("'");
-    return result;
-}
-
-// flatten a tensor into a 2D tensor, where splitPoint is the first index to go into the second dimension
-// The tensor must be flattenable this way, i.e. each of the two index ranges must be dense.
-static void FlattenToMatrix(TensorShape& shape, bool trans, size_t splitPoint)
-{
-    if (trans)
-        splitPoint = shape.GetRank() - splitPoint;
-
-    shape.FlattenTo2DInPlace(splitPoint, "DoMatrixProductOf");
-}
-
 // convert tensor into a Matrix object
 template <class ElemType>
 shared_ptr<Matrix<ElemType>> TensorView<ElemType>::AsMatrix() const
@@ -356,28 +331,6 @@ shared_ptr<Matrix<ElemType>> TensorView<ElemType>::AsMatrix() const
         return make_shared<Matrix<ElemType>>(m_sob->ColumnSlice(firstColumn, numColumns).Reshaped(m_shape[0], m_shape[1]));
 }
 
-void FlattenShapesToMatrix(TensorShape& shapeA, bool transA, TensorShape& shapeB, bool transB, TensorShape& shapeC, bool transC)
-{
-    if (shapeA.GetRank() + shapeB.GetRank() < shapeC.GetRank())
-        InvalidArgument("DoMatrixProductOf: Ranks %s don't match, output must have a non-reduced output dimension.", MatrixProductFormat(shapeA, transA, shapeB, transB, shapeC, transC).c_str());
-    let removedDims = shapeA.GetRank() + shapeB.GetRank() - shapeC.GetRank();
-    let numReducedDims = removedDims / 2;
-    if (numReducedDims * 2 != removedDims)
-        InvalidArgument("DoMatrixProductOf: Ranks %s mismatch.", MatrixProductFormat(shapeA, transA, shapeB, transB, shapeC, transC).c_str());
-    let firstReducedDim = shapeA.GetRank() - numReducedDims;
-    // flatten. This updates shapeA etc.
-    FlattenToMatrix(shapeA, transA, firstReducedDim);
-    FlattenToMatrix(shapeB, transB, numReducedDims);
-    FlattenToMatrix(shapeC, transC, firstReducedDim);
-    // check dimensions
-    // shapeX[transX] and shapeX[1-transX] are row and column dim, respectively, or swapped if transposed
-    if (shapeA[transA] != shapeC[transC] || // output dim
-        shapeB[1 - transB] != shapeC[1 - transC] || // input dim
-        shapeA[1 - transA] != shapeB[transB])     // reduction dim
-    {
-        InvalidArgument("DoMatrixProductOf: Flattened tensor dimensions %s mismatch.", MatrixProductFormat(shapeA, transA, shapeB, transB, shapeC, transC).c_str());
-    }
-}
 
 template <class ElemType>
 void TensorView<ElemType>::DoMatrixProductOf(ElemType beta, bool transC, const TensorView& a, bool transA, const TensorView& b, bool transB, ElemType alpha)
@@ -476,7 +429,6 @@ void TensorView<ElemType>::AssignQuantizedMatrixProductOf(const TensorView& a, b
 #else
     BlockMultiplier<BlockHandlerSSE> mult;
 #endif
-    //BlockMultiplier<BlockHandlerSSE> mult;
     int16_t* newA;
     ElemType scaleA;
     let  B = b.Reshaped(shapeB).AsMatrix();
@@ -497,7 +449,7 @@ void TensorView<ElemType>::AssignQuantizedMatrixProductOf(const TensorView& a, b
     }
     else 
     {
-        let  A = a.Reshaped(shapeA).AsMatrix();
+        let A = a.Reshaped(shapeA).AsMatrix();
         int16_t* matA = mult.CreateMatrixA(m, k);
         scaleA = ScaleUp(matA, A, transA ? A->GetNumCols() : A->GetNumRows(), transA);
         newA = mult.PrepareB(matA, k, m);
@@ -510,7 +462,7 @@ void TensorView<ElemType>::AssignQuantizedMatrixProductOf(const TensorView& a, b
         }
     }
 
-    assert(k == l); l;
+    assert(k == l);
     int n = (int)shapeB.GetDim(1);
     int16_t* matB = mult.CreateMatrixB(k, n);
     int32_t* matC = mult.CreateMatrixC(m, n);

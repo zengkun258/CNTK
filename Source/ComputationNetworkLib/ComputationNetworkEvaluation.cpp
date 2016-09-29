@@ -1022,6 +1022,7 @@ void ComputationNetwork::AllocateAllMatrices(const std::vector<ComputationNodeBa
         {
             // TODO: use FormNestedNetwork() here to avoid completedEvaluate[] check
             shared_ptr<SEQTraversalFlowControlNode> recInfo = FindInRecurrentLoops(m_allSEQNodes, nodeIter);
+            fprintf(stderr, "CURRENT node for %ls %ls operation\n", nodeIter->NodeName().c_str(), nodeIter->OperationName().c_str());
             assert(recInfo != nullptr);
             if (completedEvaluate.insert(recInfo).second)
             {

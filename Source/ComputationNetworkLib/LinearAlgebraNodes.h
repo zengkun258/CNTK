@@ -18,6 +18,11 @@
 #include <algorithm>
 #include <utility>
 #include <assert.h>
+#include "BlockMultiplier.h"
+#include "BlockHandlerSSE.h"
+#ifdef SUPPORT_AVX2
+#include "BlockHandlerAVX.h"
+#endif
 
 namespace Microsoft { namespace MSR { namespace CNTK {
 
@@ -586,13 +591,29 @@ class QuantizedBlockTimesNode : public TimesNodeBase<ElemType, m_transpose>
     int16_t* m_preparedA = nullptr;
     ElemType m_scaleA;
     bool m_reuseA;
+    bool m_firstPass;
+#ifdef SUPPORT_AVX2
+    BlockMultiplier<BlockHandlerAVX> mult;
+#else
+    BlockMultiplier<BlockHandlerSSE> mult;
+#endif
+    int16_t* m_matA;
+    int16_t* m_newA;
+
 public:
     QuantizedBlockTimesNode(DEVICEID_TYPE deviceId, const wstring& name, size_t outputRank = 1)
         : Base(deviceId, name, outputRank)
     {
+        if (deviceId != CPUDEVICE)
+            LogicError("Quantized operation is supposed to be used on CPU device only.");
+        m_firstPass = true;
     }
 
-public:
+    QuantizedBlockTimesNode(const QuantizedBlockTimesNode& node) : Base(node.GetDeviceId(), node.NodeName(), node.OutputRank())
+    {
+        LogicError("TODO: Copy ctor for the QuantizedBlockTimesNode");
+    }
+
     virtual void /*ComputationNode::*/ ForwardProp(const FrameRange& fr) override
     {           
         if (!fr.IsOneColumnWrt(Input(0)->GetMBLayout()))
@@ -603,11 +624,37 @@ public:
         TensorView<ElemType> input0 = OneSampleTensorFor(0,  /*gradient=*/false, fr.AllowBroadcast());
         TensorView<ElemType> input1 = OneSampleTensorFor(1,  /*gradient=*/false, fr.AllowBroadcast());
         TensorView<ElemType> output = OneSampleTensorFor(-1, /*gradient=*/false, fr);
-        output.AssignQuantizedMatrixProductOf(input0, m_transpose/*transA*/, input1, m_reuseA ? &m_preparedA : nullptr, &m_scaleA);
-    }
-private:
 
-public:
+        if (m_firstPass)
+        {
+            auto shapeA = input0.GetShape();
+            auto shapeB = input1.GetShape();
+            auto shapeC = output.GetShape();
+
+            FlattenShapesToMatrix(shapeA, m_transpose, shapeB, /*transC*/false, shapeC, /*transC*/false);
+
+            int m = (int)shapeA.GetDim(0);
+            int k = (int)shapeA.GetDim(1);
+            int l = (int)shapeB.GetDim(0);
+            assert(k == l);
+
+            m_matA = mult.CreateMatrixA(m, k);
+            m_newA = mult.PrepareB(m_matA, k, m);
+        }
+        else
+        {
+
+        }
+
+
+        
+        //
+
+        output.AssignQuantizedMatrixProductOf(input0, m_transpose/*transA*/, input1, m_reuseA ? &m_preparedA : nullptr, &m_scaleA);
+
+        m_firstPass = false;
+    }
+
     virtual void /*ComputationNode::*/ BackpropTo(const size_t /*inputIndex*/, const FrameRange& /*fr*/) override
     {
         NOT_IMPLEMENTED;
@@ -623,9 +670,12 @@ public:
     {
         if (m_preparedA != nullptr)
         {
-             TensorView<ElemType>::FreeQuantizedMatrix(m_preparedA); 
+            TensorView<ElemType>::FreeQuantizedMatrix(m_preparedA);
         }
     }
+private:
+    
+
 };
 
 template class QuantizedBlockTimesNode<float, false>;

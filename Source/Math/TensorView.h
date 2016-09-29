@@ -182,6 +182,54 @@ private:
     TensorShape m_shape;                // the meta-data that describes the data's shape and/or access pattern
 };
 
+// print the dimensions of a matrix-product operation, for pretty error reporting
+static string MatrixProductFormat(const TensorShape& shapeA, bool transA, const TensorShape& shapeB, bool transB, const TensorShape& shapeC, bool transC)
+{
+    string result = "[" + string(shapeA) + "]"; if (transA) result.append("'");
+    result += " * ";
+    result += "[" + string(shapeB) + "]"; if (transB) result.append("'");
+    result += " -> ";
+    result += "[" + string(shapeC) + "]"; if (transC) result.append("'");
+    return result;
+}
+
+// -------------------------------------------------------------------
+// matrix product -- GEMM for flattened tensors
+// -------------------------------------------------------------------
+// flatten a tensor into a 2D tensor, where splitPoint is the first index to go into the second dimension
+// The tensor must be flattenable this way, i.e. each of the two index ranges must be dense.
+static void FlattenToMatrix(TensorShape& shape, bool trans, size_t splitPoint)
+{
+    if (trans)
+        splitPoint = shape.GetRank() - splitPoint;
+
+    shape.FlattenTo2DInPlace(splitPoint, "DoMatrixProductOf");
+}
+
+void FlattenShapesToMatrix(TensorShape& shapeA, bool transA, TensorShape& shapeB, bool transB, TensorShape& shapeC, bool transC)
+{
+    if (shapeA.GetRank() + shapeB.GetRank() < shapeC.GetRank())
+        InvalidArgument("DoMatrixProductOf: Ranks %s don't match, output must have a non-reduced output dimension.", MatrixProductFormat(shapeA, transA, shapeB, transB, shapeC, transC).c_str());
+    let removedDims = shapeA.GetRank() + shapeB.GetRank() - shapeC.GetRank();
+    let numReducedDims = removedDims / 2;
+    if (numReducedDims * 2 != removedDims)
+        InvalidArgument("DoMatrixProductOf: Ranks %s mismatch.", MatrixProductFormat(shapeA, transA, shapeB, transB, shapeC, transC).c_str());
+    let firstReducedDim = shapeA.GetRank() - numReducedDims;
+    // flatten. This updates shapeA etc.
+    FlattenToMatrix(shapeA, transA, firstReducedDim);
+    FlattenToMatrix(shapeB, transB, numReducedDims);
+    FlattenToMatrix(shapeC, transC, firstReducedDim);
+    // check dimensions
+    // shapeX[transX] and shapeX[1-transX] are row and column dim, respectively, or swapped if transposed
+    if (shapeA[transA] != shapeC[transC] || // output dim
+        shapeB[1 - transB] != shapeC[1 - transC] || // input dim
+        shapeA[1 - transA] != shapeB[transB])     // reduction dim
+    {
+        InvalidArgument("DoMatrixProductOf: Flattened tensor dimensions %s mismatch.", MatrixProductFormat(shapeA, transA, shapeB, transB, shapeC, transC).c_str());
+    }
+}
+
+
 }}}
 
 #pragma warning(pop)
