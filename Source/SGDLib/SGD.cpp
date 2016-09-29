@@ -953,13 +953,13 @@ size_t SGD<ElemType>::TrainOneEpoch(ComputationNetworkPtr net,
 
     // In case adaptive minibatch/learning rates are used, the training can be limited by the maxNumberOfSamples.
     bool trainingFinished = false;
-    size_t epochStartSample = 0, epochCurrentSample = 0;
+    size_t epochStartSample = 0;
     bool shouldCheckEarlyExit = maxNumberOfSamples != std::numeric_limits<size_t>().max();
     if (shouldCheckEarlyExit)
     {
         // Some old readers do not implement GetCurrentSamplePosition()
         // for those adaptive minibatch size is not supported. But they can be used for usual training.
-        epochStartSample = epochCurrentSample = trainSetDataReader->GetCurrentSamplePosition();
+        epochStartSample = trainSetDataReader->GetCurrentSamplePosition();
     }
 
     bool noMoreSamplesToProcess = false;
