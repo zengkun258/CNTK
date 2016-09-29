@@ -620,6 +620,19 @@ def deleteFile(filePath):
     if os.path.exists(filePath):
         os.remove(filePath)
 
+def writeFile(outputFile, lines):
+    with open(outputFile,'w') as f:
+        for line in lines:
+            f.write("%s\n" % line)
+
+def writeTable(outputFile, table):
+    lines = tableToList1D(table)
+    writeFile(outputFile, lines)
+
+def deleteFile(filePath):
+    if os.path.exists(filePath):
+        os.remove(filePath)
+
 def deleteAllFilesInDirectory(directory, fileEndswithString, boPromptUser = False):
     if boPromptUser:
         userInput = raw_input('--> INPUT: Press "y" to delete files in directory ' + directory + ": ")
@@ -650,6 +663,15 @@ def splitString(string, delimiter='\t', columnsToKeepIndices=None):
 def splitStrings(strings, delimiter, columnsToKeepIndices=None):
     table = [splitString(string, delimiter, columnsToKeepIndices) for string in strings]
     return table;
+
+def find(list1D, func):
+    return [index for (index,item) in enumerate(list1D) if func(item)]
+
+def tableToList1D(table, delimiter='\t'):
+    return [delimiter.join([str(s) for s in row]) for row in table]
+
+def sortDictionary(dictionary, sortIndex=0, reverseSort=False):
+    return sorted(dictionary.items(), key=lambda x: x[sortIndex], reverse=reverseSort)
 
 def imread(imgPath, boThrowErrorIfExifRotationTagSet = True):
     if not os.path.exists(imgPath):
@@ -735,6 +757,21 @@ def drawRectangles(img, rects, color = (0, 255, 0), thickness = 2):
         pt2 = tuple(ToIntegers(rect[2:]))
         cv2.rectangle(img, pt1, pt2, color, thickness)
 
+def drawCrossbar(img, pt):
+    (x,y) = pt
+    cv2.rectangle(img, (0, y), (x, y), (255, 255, 0), 1)
+    cv2.rectangle(img, (x, 0), (x, y), (255, 255, 0), 1)
+    cv2.rectangle(img, (img.shape[1],y), (x, y), (255, 255, 0), 1)
+    cv2.rectangle(img, (x, img.shape[0]), (x, y), (255, 255, 0), 1)
+
+def ptClip(pt, maxWidth, maxHeight):
+    pt = list(pt)
+    pt[0] = max(pt[0], 0)
+    pt[1] = max(pt[1], 0)
+    pt[0] = min(pt[0], maxWidth)
+    pt[1] = min(pt[1], maxHeight)
+    return pt
+
 def drawText(img, pt, text, textWidth=None, color = (255,255,255), colorBackground = None, font = ImageFont.truetype("arial.ttf", 16)):
     pilImg = imconvertCv2Pil(img)
     pilImg = pilDrawText(pilImg,  pt, text, textWidth, color, colorBackground, font)
@@ -793,6 +830,14 @@ def softmax2D(w):
     e = np.exp(w)
     dist = e / np.sum(e, axis=1)[:, np.newaxis]
     return dist
+
+def getDictionary(keys, values, boConvertValueToInt = True):
+    dictionary = {}
+    for key,value in zip(keys, values):
+        if (boConvertValueToInt):
+            value = int(value)
+        dictionary[key] = value
+    return dictionary
 
 class Bbox:
     MAX_VALID_DIM = 100000
@@ -854,6 +899,13 @@ class Bbox:
         self.top = topNew
         self.right = rightNew
         self.bottom = bottomNew
+
+    def crop(self, maxWidth, maxHeight):
+        leftNew   = min(max(self.left,   0), maxWidth)
+        topNew    = min(max(self.top,    0), maxHeight)
+        rightNew  = min(max(self.right,  0), maxWidth)
+        bottomNew = min(max(self.bottom, 0), maxHeight)
+        return Bbox(leftNew, topNew, rightNew, bottomNew)
 
     def isValid(self):
         if self.left>=self.right or self.top>=self.bottom:

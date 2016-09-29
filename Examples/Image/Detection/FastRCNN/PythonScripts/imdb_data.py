@@ -6,7 +6,7 @@
 # --------------------------------------------------------
 
 import sys, os
-from cntk_helpers import readGtAnnotation, computeAveragePrecision
+from cntk_helpers import *
 import scipy.sparse
 import scipy.io as sio
 import cPickle
