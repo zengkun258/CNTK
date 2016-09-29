@@ -290,6 +290,7 @@ cv::Rect CropTransformer::GetCropRect(CropType type, int viewIndex, int crow, in
     return cv::Rect(xOff, yOff, cropSizeX, cropSizeY);
 }
 
+// This transformer pads input images to a target width and height, making them all the same size.
 PadTransformer::PadTransformer(const ConfigParameters& config) : ImageTransformerBase(config)
 {
     m_targetW = config(L"width");
@@ -309,7 +310,6 @@ PadTransformer::PadTransformer(const ConfigParameters& config) : ImageTransforme
 
 }
 
-// The method describes how input stream is transformed to the output stream. Called once per applied stream.
 StreamDescription PadTransformer::Transform(const StreamDescription& inputStream)
 {
     ImageTransformerBase::Transform(inputStream);
@@ -327,13 +327,14 @@ void PadTransformer::Apply(size_t id, cv::Mat &mat)
     assert(hdiff >= 0);
     assert(wdiff >= 0);
 
-    int top = (int)hdiff, 
-        bottom = (int)m_targetH - top - mat.rows,
-        left = (int)wdiff,
-        right = (int)m_targetW - left - mat.cols;
+    int top = (int)hdiff;
+    int bottom = (int)m_targetH - top - mat.rows;
+    int left = (int)wdiff;
+    int right = (int)m_targetW - left - mat.cols;
     cv::copyMakeBorder(mat, mat, top, bottom, left, right, m_borderType, m_value);
 }
 
+// This transformer scales either the minimum or maximum side to a certain target number and preserves the aspect ratio.
 ScaleSideTransformer::ScaleSideTransformer(const ConfigParameters& config) : ImageTransformerBase(config)
 {
     m_target = config(L"target");

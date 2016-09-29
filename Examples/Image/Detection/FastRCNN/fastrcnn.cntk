@@ -77,7 +77,7 @@ Train = {
 
         z = model (features, rois)
         
-        ce = NewCrossEntropyWithSoftmax(roiLabels, z, axis = 1)
+        ce = CrossEntropyWithSoftmax(roiLabels, z, axis = 1)
         errs = ClassificationError(roiLabels, z, axis = 1)
         
         featureNodes    = (features:rois)
@@ -153,7 +153,7 @@ Test = {
 
         z = clonedNet(features, rois).z
         
-        ce = NewCrossEntropyWithSoftmax (roiLabels, z, axis = 1)
+        ce = CrossEntropyWithSoftmax (roiLabels, z, axis = 1)
         errs = ClassificationError(z, roiLabels, axis = 1)
         
         featureNodes    = (features:rois)
