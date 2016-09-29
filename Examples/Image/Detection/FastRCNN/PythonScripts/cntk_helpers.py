@@ -243,7 +243,7 @@ def parseCntkOutput(cntkImgsListPath, cntkOutputPath, outParsedDir, cntkNrRois, 
     imgPaths = getColumn(readTable(cntkImgsListPath), 1)
     with open(cntkOutputPath) as fp:
         for imgIndex in range(len(imgPaths)):
-            lines = [fp.readline() for _ in range(cntkNrRois)]
+            line = fp.readline()
             if skip5Mod != None and imgIndex % 5 != skip5Mod:
                 print "Skipping image {} (skip5Mod = {})".format(imgIndex, skip5Mod)
                 continue
@@ -251,10 +251,13 @@ def parseCntkOutput(cntkImgsListPath, cntkOutputPath, outParsedDir, cntkNrRois, 
 
             # convert to floats
             data = []
-            for line in lines:
-                values = np.fromstring(line, dtype=float, sep=" ")
-                assert len(values) == outputDim, "ERROR: expected dimension of {} but found {}".format(outputDim, len(values))
-                data.append(values)
+            values = np.fromstring(line, dtype=float, sep=" ")
+            assert len(values) == cntkNrRois * outputDim, "ERROR: expected dimension of {} but found {}".format(cntkNrRois * outputDim, len(values))
+            for i in range(cntkNrRois):
+                posStart = i * outputDim
+                posEnd = posStart + outputDim
+                currValues = values[posStart:posEnd]
+                data.append(currValues)
 
             # save
             data = np.array(data, np.float32)
@@ -579,6 +582,29 @@ def im_detect(net, im, boxes, feature_scale=None, bboxIndices=None, boReturnClas
 # Subset of helper library
 # used in the fastRCNN code
 ####################################
+# Typical meaning of variable names -- Computer Vision:
+#    pt                     = 2D point (column,row)
+#    img                    = image
+#    width,height (or w/h)  = image dimensions
+#    bbox                   = bbox object (stores: left, top,right,bottom co-ordinates)
+#    rect                   = rectangle (order: left, top, right, bottom)
+#    angle                  = rotation angle in degree
+#    scale                  = image up/downscaling factor
+
+# Typical meaning of variable names -- general:
+#    lines,strings = list of strings
+#    line,string   = single string
+#    xmlString     = string with xml tags
+#    table         = 2D row/column matrix implemented using a list of lists
+#    row,list1D    = single row in a table, i.e. single 1D-list
+#    rowItem       = single item in a row
+#    list1D        = list of items, not necessarily strings
+#    item          = single item of a list1D
+#    slotValue     = e.g. "terminator" in: play <movie> terminator </movie>
+#    slotTag       = e.g. "<movie>" or "</movie>" in: play <movie> terminator </movie>
+#    slotName      = e.g. "movie" in: play <movie> terminator </movie>
+#    slot          = e.g. "<movie> terminator </movie>" in: play <movie> terminator </movie>
+
 import cv2, copy, textwrap
 from PIL import Image, ImageFont, ImageDraw
 from PIL.ExifTags import TAGS
