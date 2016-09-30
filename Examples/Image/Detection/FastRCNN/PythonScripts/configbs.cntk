@@ -11,7 +11,7 @@
 # Classification error and evaluation criterion are computed for each ROI.
 
 #makeMode = false
-command = Train:WriteTest
+command = Train:WriteTest:WriteTrain
 
 deviceId = "Auto"
 precision = "float"
@@ -56,7 +56,7 @@ Train = {
         ROIShape   = 4:$NumTrainROIs$                   # 4:64
 
         #network     = BS.Network.Load ("AlexNet.89")
-        network     = BS.Network.Load ("../../../resources/cntk_model/AlexNet.89")
+        network     = BS.Network.Load ("../../../cntk_model/AlexNet.89")
         pool1       = BS.Network.CloneFunction(network.features, network.pool1, parameters = "constant")
         convLayers  = BS.Network.CloneFunction(network.pool1, network.conv5_y)
         fcLayers    = BS.Network.CloneFunction(network.pool3, network.h2_d)
@@ -67,7 +67,7 @@ Train = {
             conv5Out = convLayers (pool1Out)
             roiOut   = ROIPooling (conv5Out, rois, (6:6))
             fcOut    = fcLayers (roiOut)
-            W        = ParameterTensor{($NumLabels$:4096)}
+            W        = ParameterTensor{($NumLabels$:4096), init="glorotUniform"}
             b        = ParameterTensor{$NumLabels$, init = 'zero'}
             z        = W * fcOut + b
         }.z
@@ -78,7 +78,7 @@ Train = {
 
         z = model (features, rois)
         
-        ce = NewCrossEntropyWithSoftmax(roiLabels, z, axis = 1)
+        ce = CrossEntropyWithSoftmax(roiLabels, z, axis = 1)
         errs = ClassificationError(roiLabels, z, axis = 1)
         
         featureNodes    = (features:rois)
@@ -91,10 +91,10 @@ Train = {
     SGD = {
         epochSize = 0
         minibatchSize = 2
-        maxEpochs = 15
+        maxEpochs = 3
         
-        learningRatesPerSample = 0.00005
-        momentumAsTimeConstant = 0*5:1024 # was: 0.9 per MB 
+        learningRatesPerSample = 0.0000005
+        momentumAsTimeConstant = 0 
         L2RegWeight = 0.0001
         dropoutRate = 0.5
         
@@ -130,16 +130,115 @@ Train = {
     }
 }
 
-# For testing we load the trained Fast-RCNN model and modify the input size,
-# such that the network accepts 200 ROIs per image. To this end we load and 
-# clone the entire network and define new inputs with the desired size 
-# corresponding to 200 ROIs. 
+# Write network output for entire test data set
 WriteTest = {
     action = "write"
     minibatchSize = 1
 
     # outputPath = "$OutputDir$/fastrcnnNetOutput"
     outputPath=test
+    
+    reader = {
+        randomize = false
+        verbosity = 2
+        deserializers = ({
+            type = "CNTKTextFormatDeserializer" ; module = "CNTKTextFormatReader"
+            #file = "$dataDir$/test2007pad_all.rois.txt"
+            file = test.rois.txt
+            input = { rois = { dim = $TestROIDim$ ; format = "dense" } }
+        }:{
+            type = "CNTKTextFormatDeserializer" ; module = "CNTKTextFormatReader"
+            #file = "$dataDir$/test2007pad_all.roilabels.txt"
+            file = test.roilabels.txt
+            input = { roiLabels = { dim = $TestROILabelDim$ ; format = "dense" } }
+        }:{
+            type = "ImageDeserializer" ; module = "ImageReader"
+            #file = "$dataDir$/test2007pad_all.txt"
+            file = test.txt
+            input = {
+                features = { transforms = (
+                    { type = "ScaleSide" ; target = $ImageW$ ; side = "max" }:
+                    { type = "Pad" ; width = $ImageW$ ; height = $ImageH$; channels = $ImageC$; value = 114 }:
+                    { type = "Transpose" }
+                )}
+                ignored = {labelDim = 1000}
+            }
+        })
+    }
+}
+
+# Write network output for entire train data set
+WriteTrain = {
+    action = "write"
+    minibatchSize = 1
+
+    # outputPath = "$OutputDir$/fastrcnnNetOutput"
+    outputPath=train
+    
+    reader = {
+        randomize = false
+        verbosity = 2
+        deserializers = ({
+            type = "CNTKTextFormatDeserializer" ; module = "CNTKTextFormatReader"
+            #file = "$dataDir$/test2007pad_all.rois.txt"
+            file = train.rois.txt
+            input = { rois = { dim = $TestROIDim$ ; format = "dense" } }
+        }:{
+            type = "CNTKTextFormatDeserializer" ; module = "CNTKTextFormatReader"
+            #file = "$dataDir$/test2007pad_all.roilabels.txt"
+            file = train.roilabels.txt
+            input = { roiLabels = { dim = $TestROILabelDim$ ; format = "dense" } }
+        }:{
+            type = "ImageDeserializer" ; module = "ImageReader"
+            #file = "$dataDir$/test2007pad_all.txt"
+            file = train.txt
+            input = {
+                features = { transforms = (
+                    { type = "ScaleSide" ; target = $ImageW$ ; side = "max" }:
+                    { type = "Pad" ; width = $ImageW$ ; height = $ImageH$; channels = $ImageC$; value = 114 }:
+                    { type = "Transpose" }
+                )}
+                ignored = {labelDim = 1000}
+            }
+        })
+    }
+}
+
+# For testing we load the trained Fast-RCNN model and modify the input size,
+# such that the network accepts 200 ROIs per image. To this end we load and 
+# clone the entire network and define new inputs with the desired size 
+# corresponding to 200 ROIs. 
+WriteTestModify = {
+    action = "write"
+    minibatchSize = 1
+
+    # outputPath = "$OutputDir$/fastrcnnNetOutput"
+    outputPath=test
+    
+    BrainScriptNetworkBuilder = {
+        imageShape = $ImageH$:$ImageW$:$ImageC$        # 1000:1000:3
+        labelShape = $NumLabels$:$NumTestROIs$         # 21:200
+        ROIShape   = 4:$NumTestROIs$                   # 4:200
+
+        # load network
+        network = BS.Network.Load ("$modelPath$")
+        clonedNet = BS.Network.CloneFunction ((network.features:network.rois), { z = network.z }, parameters = "constant")
+
+        features = Input {imageShape}
+        roiLabels = Input {labelShape}
+        rois = Input {ROIShape}
+
+        z = clonedNet(features, rois).z
+        
+        ce = CrossEntropyWithSoftmax (roiLabels, z, axis = 1)
+        errs = ClassificationError(z, roiLabels, axis = 1)
+        
+        featureNodes    = (features:rois)
+        labelNodes      = (roiLabels)
+        criterionNodes  = (ce)
+        evaluationNodes = (errs)
+        outputNodes     = (z)
+    }
     
     reader = {
         randomize = false

@@ -47,7 +47,7 @@ for image_set in image_sets:
     if classifier == 'svm':
         cntkOutputPath = cntkFilesDir + image_set + ".h2.y"
     elif classifier == 'nn':
-        cntkOutputPath = cntkFilesDir + image_set + ".OutputNodes.z"
+        cntkOutputPath = cntkFilesDir + image_set + ".z"
     else:
         error
 
