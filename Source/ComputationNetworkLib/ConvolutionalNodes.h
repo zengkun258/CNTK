@@ -196,11 +196,11 @@ protected:
         SpaceTransform result;
         result.m_axisTransforms.resize(2);
 
-        result.m_axisTransforms[0].scale = static_cast<float>(geometry->GetStride(0));
-        result.m_axisTransforms[0].translate = static_cast<float>((geometry->KernelShape()[0] - 1) / 2 - geometry->GetLowerPad(0));
+        result.m_axisTransforms[0].scale = (float)(geometry->GetStride(0));
+        result.m_axisTransforms[0].translate = (float)((geometry->KernelShape()[0] - 1) / 2 - geometry->GetLowerPad(0));
 
-        result.m_axisTransforms[1].scale = static_cast<float>(geometry->GetStride(1));
-        result.m_axisTransforms[1].translate = static_cast<float>((geometry->KernelShape()[1] - 1) / 2 - geometry->GetLowerPad(1));
+        result.m_axisTransforms[1].scale = (float)(geometry->GetStride(1));
+        result.m_axisTransforms[1].translate = (float)((geometry->KernelShape()[1] - 1) / 2 - geometry->GetLowerPad(1));
 
         return result;
     }
@@ -247,7 +247,7 @@ public:
 // -----------------------------------------------------------------------
 
 template <class ElemType>
-class ConvolutionNode : public ConvolutionNodeBase<ElemType>, public NumInputs<2>, public TransformerNode<ConvolutionNode<ElemType>>
+class ConvolutionNode : public ConvolutionNodeBase<ElemType>, public NumInputs<2>, public TransformerNode
 {
     typedef ConvolutionNodeBase<ElemType> Base; UsingConvolutionNodeBaseMembers;
     static const std::wstring TypeName() { return L"Convolution"; }
@@ -506,10 +506,10 @@ public:
     }
 
 private:
-    using TransformerNode<ConvolutionNode<ElemType>>::m_transforms;
+    using TransformerNode::m_transforms;
     using ConvolutionNodeBase<ElemType>::ComputeFilterTransform;
 
-    virtual void /*ITransformerNode::*/ComputeTransforms() override
+    virtual void /*TransformerNode::*/ComputeTransforms() override
     {
         if (m_transforms[1].m_axisTransforms.empty())
         {
@@ -524,7 +524,7 @@ private:
         // else: transform already computed, no need to do computation again.
     }
 
-    virtual bool /*ITransformerNode::*/SupportsTransformOnInput(size_t inputIndex) override
+    virtual bool /*TransformerNode::*/SupportsTransformOnInput(size_t inputIndex) override
     {
         // We support transforms just on convolution input.
         return (inputIndex == 1);
@@ -541,7 +541,7 @@ protected:
 // -----------------------------------------------------------------------
 
 template <class ElemType>
-class PoolingNode : public ConvolutionNodeBase<ElemType>, public NumInputs<1>, public TransformerNode<PoolingNode<ElemType>>
+class PoolingNode : public ConvolutionNodeBase<ElemType>, public NumInputs<1>, public TransformerNode
 {
     typedef ConvolutionNodeBase<ElemType> Base; UsingConvolutionNodeBaseMembers;
     static const std::wstring TypeName() { return L"Pooling"; }
@@ -625,10 +625,10 @@ public:
     }
 
 private:
-    using TransformerNode<PoolingNode<ElemType>>::m_transforms;
+    using TransformerNode::m_transforms;
     using ConvolutionNodeBase<ElemType>::ComputeFilterTransform;
 
-    virtual void /*ITransformerNode::*/ComputeTransforms() override
+    virtual void /*TransformerNode::*/ComputeTransforms() override
     {
         if (m_transforms[0].m_axisTransforms.empty())
         {
@@ -638,7 +638,7 @@ private:
         // else: transform already computed, no need to do it again.
     }
 
-    virtual bool /*ITransformerNode::*/SupportsTransformOnInput(size_t /*inputIndex*/) override
+    virtual bool /*TransformerNode::*/SupportsTransformOnInput(size_t /*inputIndex*/) override
     {
         // We support transforms on all inputs (one here).
         return true;
@@ -661,7 +661,7 @@ private:
 // -----------------------------------------------------------------------
 
 template <class ElemType>
-class MaxUnpoolingNode : public ConvolutionNodeBase<ElemType>, public NumInputs<2>, public TransformerNode<MaxUnpoolingNode<ElemType>>
+class MaxUnpoolingNode : public ConvolutionNodeBase<ElemType>, public NumInputs<2>, public TransformerNode
 {
     typedef ConvolutionNodeBase<ElemType> Base;
     UsingConvolutionNodeBaseMembers;
@@ -747,19 +747,19 @@ public:
     }
 
 private:
-    using TransformerNode<MaxUnpoolingNode<ElemType>>::m_transforms;
+    using TransformerNode::m_transforms;
     using ConvolutionNodeBase<ElemType>::ComputeFilterTransform;
 
-    virtual void /*ITransformerNode::*/ComputeTransforms() override
+    virtual void /*TransformerNode::*/ComputeTransforms() override
     {
-        if (m_transforms.size() == 0)
+        if (m_transforms.empty())
         {
             m_transforms[0] = ComputeFilterTransform();
         }
         // else: transform already computed, no need to do it again.
     }
 
-    virtual bool /*ITransformerNode::*/SupportsTransformOnInput(size_t inputIndex) override
+    virtual bool /*TransformerNode::*/SupportsTransformOnInput(size_t inputIndex) override
     {
         // We support transform for just unpool input.
         return (inputIndex == 0);

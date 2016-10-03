@@ -907,10 +907,219 @@ struct NumInputs : public INumInputs // e.g. derive from NumInputs<2>
     {
         return m_numInputs;
     }
+};
 
-    // Exposed as variable as well to enable its use where constants are required (for example
-    // allocate array with this size). Can be replaced with static method once constexpr is supported widely.
-    static const size_t c_numInputs = m_numInputs;
+// =======================================================================
+// AxisTransform -- Defines transformation along one axis. Currently, just
+// scale and translation are supported.
+// =======================================================================
+
+struct AxisTransform
+{
+public:
+    bool operator==(const AxisTransform& other) const
+    {
+        return (scale == other.scale) && (translate == other.translate);
+    }
+
+    bool operator!=(const AxisTransform& other) const
+    {
+        return !operator==(other);
+    }
+
+
+    // Scale along the axis (by default identity transform -> 1 scale).
+    double scale = 1.0;
+    // Translation along the axis (by default identity transform -> 0 translate).
+    double translate = 0.0;
+};
+
+// =======================================================================
+// SpaceTransform -- Combines several axis transforms into space transform.
+// =======================================================================
+
+struct SpaceTransform
+{
+public:
+    SpaceTransform() {}
+
+    // Returns all axis transforms.
+    std::vector<AxisTransform>* GetTransform()
+    {
+        return &m_axisTransforms;
+    }
+
+    bool operator==(const SpaceTransform& other) const
+    {
+        CheckCompatibility(other);
+        for (size_t i = 0; i < m_axisTransforms.size(); i++)
+        {
+            if (m_axisTransforms[i] != other.m_axisTransforms[i])
+                return false;
+        }
+        return true;
+    }
+
+    bool operator!=(const SpaceTransform& other) const
+    {
+        return !operator==(other);
+    }
+
+    // Returns identity transform with given number of dimensions.
+    static SpaceTransform Identity(int dimensions)
+    {
+        SpaceTransform result;
+        result.m_axisTransforms.resize(dimensions);
+        return result;
+    }
+
+    // Returns composition of this transform with given one (without modifying this one).
+    SpaceTransform Compose(const SpaceTransform& other) const
+    {
+        CheckCompatibility(other);
+        SpaceTransform result = SpaceTransform::Identity(m_axisTransforms.size());
+        for (size_t ia = 0; ia < m_axisTransforms.size(); ia++)
+        {
+            result.m_axisTransforms[ia].scale     = m_axisTransforms[ia].scale * other.m_axisTransforms[ia].scale;
+            result.m_axisTransforms[ia].translate = m_axisTransforms[ia].scale * other.m_axisTransforms[ia].translate + m_axisTransforms[ia].translate;
+        }
+        return result;
+    }
+
+    // Returns inverse of this transform without modifying it.
+    SpaceTransform Inverse() const
+    {
+        SpaceTransform result = SpaceTransform::Identity(m_axisTransforms.size());
+        for (size_t ia = 0; ia < m_axisTransforms.size(); ia++)
+        {
+            result.m_axisTransforms[ia].scale = 1 / m_axisTransforms[ia].scale;
+            result.m_axisTransforms[ia].translate = -m_axisTransforms[ia].translate / m_axisTransforms[ia].scale;
+        }
+        return result;
+    }
+
+    // Check if this transform is compatible with given one.
+    void CheckCompatibility(const SpaceTransform& other) const
+    {
+        // Transforms are compatible if they have same number of axis transforms.
+        if (m_axisTransforms.size() != other.m_axisTransforms.size())
+        {
+            RuntimeError("Incompatible space transforms.");
+        }
+    }
+
+    std::vector<AxisTransform> m_axisTransforms;
+};
+
+// =======================================================================
+// TransformerNode -- Base class for all nodes that implement input-output
+// transformation. Using individual node transformations one can calculate cumulative
+// transformation between two nodes and establish spatial matching of its inputs or
+// outputs. Node needs to provide its type and template argument (we use recurring
+// template pattern to access number of inputs of the derived object).
+// Note: This interface assumes that node also inherits from NumInputs<> class.
+// =======================================================================
+
+struct TransformerNode
+{
+public:
+    TransformerNode() {}
+
+    virtual ~TransformerNode() {}
+
+    // Derived class needs to return if it supports transform computation between input at given index and output.
+    virtual bool SupportsTransformOnInput(size_t index) = 0;
+
+    // Derived class needs to compute transforms for all axes for all supported input-output paths (
+    // (see SupportsTransformOnInput above) on this call.
+    virtual void ComputeTransforms() = 0;
+
+    // Derived classes need to inform us regarding number of inputs they have using this call before first
+    // GetTransformForInput call.
+    void SetNumberOfInputs(size_t inputsCount)
+    {
+        // Allocate appropriate number of transforms. Here transforms will be set to identity, node needs to compute
+        // them during ComputeTransforms.
+        m_transforms.resize(inputsCount);
+    }
+
+    // Handles transform accessing for all derive classes. Derived objects still need to
+    // implement rest of ITransformerNode interface.
+    const SpaceTransform& GetTransformForInput(size_t inputIndex)
+    {
+        if (m_transforms.empty())
+            LogicError("No transforms present on GetTransformForInput call. Maybe SetNumberOfInputs has not been called?");
+
+        // Check that we are within range.
+        if (inputIndex >= m_transforms.size())
+            RuntimeError("Invalid transform index in TransformerNode.");
+
+        // Verify that derived object supports transform on given input.
+        if (!SupportsTransformOnInput(inputIndex))
+            RuntimeError("Space transform requested on unsupported input");
+
+        // All good, ask derived object to compute transforms.
+        ComputeTransforms();
+        // Return transform for requested input.
+        return m_transforms[inputIndex];
+    }
+
+protected:
+    // Transforms for all node inputs.
+    std::vector<SpaceTransform> m_transforms;
+};
+
+// =======================================================================
+// IdentityTransformerNode -- Helper class for nodes that have identity
+// transform for all inputs.
+// =======================================================================
+
+struct IdentityTransformerNode : public TransformerNode
+{
+private:
+    using TransformerNode::m_transforms;
+
+    // Set all transforms to identity.
+    virtual void ComputeTransforms() override
+    {
+        if (m_transforms[0].m_axisTransforms.empty())
+        {
+            for (size_t it = 0; it < m_transforms.size(); it++)
+            {
+                m_transforms[it].m_axisTransforms.resize(2);
+            }
+        }
+    }
+
+    // Support transforms for all inputs.
+    virtual bool SupportsTransformOnInput(size_t /*index*/) override { return true; }
+};
+
+// =======================================================================
+// IdentityTransformerNodeOnOneInput -- Helper class for nodes that support
+// identity transform for one input (defined with template argument).
+// =======================================================================
+
+template <size_t supportedInputIndex>
+struct IdentityTransformerNodeOnOneInput : public TransformerNode
+{
+private:
+    using TransformerNode::m_transforms;
+
+    virtual void ComputeTransforms() override
+    {
+        if (m_transforms[supportedInputIndex].m_axisTransforms.empty())
+        {
+            // m_axisTransforms defaults to identity.
+            m_transforms[supportedInputIndex].m_axisTransforms.resize(2);
+        }
+    }
+
+    // Support transforms just one input.
+    virtual bool SupportsTransformOnInput(size_t inputIndex) override
+    {
+        return (inputIndex == supportedInputIndex);
+    }
 };
 
 // =======================================================================
@@ -1062,6 +1271,13 @@ public:
                 m_inputs[i] = DownCast(inputs[i]); // (DownCast() checks the type; the assignment then downcasts it again)
             else
                 m_inputs[i] = nullptr; // during network creation, nullptrs are possible
+
+        // If this object implements also TransformerNode interface we need to notify it about number of inputs.
+        if (Is<TransformerNode>())
+        {
+            auto transformerNode = As<TransformerNode>();
+            transformerNode->SetNumberOfInputs(m_inputs.size());
+        }
     }
 
 protected:
@@ -1942,227 +2158,6 @@ struct IRecurrentNode { virtual int GetRecurrenceSteppingDirection() const = 0; 
 // =======================================================================
 
 struct IFreezable { virtual void FreezeParameters() { } };
-
-// =======================================================================
-// AxisTransform -- Defines transformation along one axis. Currently, just
-// scale and translation are supported.
-// =======================================================================
-
-struct AxisTransform
-{
-public:
-    bool operator==(const AxisTransform& other) const
-    {
-        return (scale == other.scale) && (translate == other.translate);
-    }
-
-    bool operator!=(const AxisTransform& other) const
-    {
-      return !operator==(other);
-    }
-
-
-    // Scale along the axis (by default identity transform -> 1 scale).
-    double scale = 1.0;
-    // Translation along the axis (by default identity transform -> 0 translate).
-    double translate = 0.0;
-};
-
-// =======================================================================
-// SpaceTransform -- Combines several axis transforms into space transform.
-// =======================================================================
-
-struct SpaceTransform
-{
-public:
-    SpaceTransform() {}
-
-    // Returns all axis transforms.
-    std::vector<AxisTransform>* GetTransform()
-    {
-        return &m_axisTransforms;
-    }
-
-    bool operator==(const SpaceTransform& other) const
-    {
-        CheckCompatibility(other);
-        for (size_t ia = 0; ia < m_axisTransforms.size(); ia++)
-        {
-          if (m_axisTransforms[ia] != other.m_axisTransforms[ia])
-            return false;
-        }
-        return true;
-    }
-
-    bool operator!=(const SpaceTransform& other) const
-    {
-        return !operator==(other);
-    }
-
-    // Returns identity transform with given number of dimensions.
-    static SpaceTransform Identity(int dimensions)
-    {
-        SpaceTransform result;
-        result.m_axisTransforms.resize(dimensions);
-        return result;
-    }
-
-    // Returns composition of this transform with given one (without modifying this one).
-    SpaceTransform Compose(const SpaceTransform& other) const
-    {
-        CheckCompatibility(other);
-        SpaceTransform result = SpaceTransform::Identity(m_axisTransforms.size());
-        for (size_t ia = 0; ia < m_axisTransforms.size(); ia++)
-        {
-            result.m_axisTransforms[ia].scale = m_axisTransforms[ia].scale * other.m_axisTransforms[ia].scale;
-            result.m_axisTransforms[ia].translate = m_axisTransforms[ia].scale * other.m_axisTransforms[ia].translate + m_axisTransforms[ia].translate;
-        }
-        return result;
-    }
-
-    // Returns inverse of this transform without modifying it.
-    SpaceTransform Inverse() const
-    {
-        SpaceTransform result = SpaceTransform::Identity(m_axisTransforms.size());
-        for (size_t ia = 0; ia < m_axisTransforms.size(); ia++)
-        {
-            result.m_axisTransforms[ia].scale = 1 / m_axisTransforms[ia].scale;
-            result.m_axisTransforms[ia].translate = -m_axisTransforms[ia].translate / m_axisTransforms[ia].scale;
-        }
-        return result;
-    }
-
-    // Check if this transform is compatible with given one.
-    void CheckCompatibility(const SpaceTransform& other) const
-    {
-        // Transforms are compatible if they have same number of axis transforms.
-        if (m_axisTransforms.size() != other.m_axisTransforms.size())
-        {
-            RuntimeError("Incompatible space transforms.");
-        }
-    }
-
-    std::vector<AxisTransform> m_axisTransforms;
-};
-
-// =======================================================================
-// ITransformerNode -- Base interface for all transform nodes. Nodes should
-// not inherit directly from this interface but rather from TransformerNode
-// (defined below). This interface is used to allow up-casts without template
-// handling.
-// =======================================================================
-
-struct ITransformerNode
-{
-public:
-    // Derived class needs to return if it supports transform computation between input at given index and output.
-    virtual bool SupportsTransformOnInput(size_t index) = 0;
-
-    // Derived class needs to compute transforms for all axis on this call.
-    virtual void ComputeTransforms() = 0;
-
-    // Returns transform for the input with given index.
-    virtual const SpaceTransform& GetTransformForInput(size_t inputIndex) = 0;
-};
-
-// =======================================================================
-// TransformerNode -- Base class for all nodes that implement input-output
-// transformation. Using individual node transformations one can calculate cumulative
-// transformation between two nodes and establish spatial matching of its inputs or
-// outputs. Node needs to provide its type and template argument (we use recurring
-// template pattern to access number of inputs of the derived object).
-// Note: This interface assumes that node also inherits from NumInputs<> class.
-// =======================================================================
-
-template <typename DerivedType>
-struct TransformerNode : ITransformerNode
-{
-public:
-    TransformerNode()
-    {
-        // Take number of inputs of derived class and allocate appropriate number of transforms.
-        // Here transforms will be set to identity, node needs to compute them during ComputeTransforms.
-        m_transforms.resize(DerivedType::c_numInputs);
-    }
-
-    virtual ~TransformerNode() {}
-
-    // Handles transform accessing for all derive classes. Derived objects still need to
-    // implement rest of ITransformerNode interface.
-    virtual const SpaceTransform& GetTransformForInput(size_t inputIndex) override final
-    {
-        // Check that we are within range.
-        if (inputIndex >= m_transforms.size())
-            RuntimeError("Invalid transform index in TransformerNode.");
-
-        // Verify that derived object supports transform on given input.
-        if (!SupportsTransformOnInput(inputIndex))
-            RuntimeError("Space transform requested on unsupported input");
-
-        // All good, ask derived object to compute transforms.
-        ComputeTransforms();
-        // Return transform for requested input.
-        return m_transforms[inputIndex];
-    }
-
-protected:
-    // Transforms for all node inputs.
-    std::vector<SpaceTransform> m_transforms;
-};
-
-// =======================================================================
-// IdentityTransformerNode -- Helper class for nodes that have identity
-// transform for all inputs.
-// =======================================================================
-
-template <typename DerivedType>
-struct IdentityTransformerNode : TransformerNode<DerivedType>
-{
-private:
-    using TransformerNode<DerivedType>::m_transforms;
-
-    // Set all transforms to identity.
-    virtual void ComputeTransforms() override
-    {
-        if (m_transforms[0].m_axisTransforms.empty())
-        {
-            for (size_t it = 0; it < m_transforms.size(); it++)
-            {
-                m_transforms[it].m_axisTransforms.resize(2);
-            }
-        }
-    }
-
-    // Support transforms for all inputs.
-    virtual bool SupportsTransformOnInput(size_t /*index*/) override { return true; }
-};
-
-// =======================================================================
-// IdentityTransformerNodeOnOneInput -- Helper class for nodes that support
-// identity transform for one input (defined with template argument).
-// =======================================================================
-
-template <typename DerivedType, size_t supportedInputIndex>
-struct IdentityTransformerNodeOnOneInput : TransformerNode<DerivedType>
-{
-private:
-    using TransformerNode<DerivedType>::m_transforms;
-
-    virtual void ComputeTransforms() override
-    {
-        if (m_transforms[supportedInputIndex].m_axisTransforms.empty())
-        {
-            // m_axisTransforms defaults to identity.
-            m_transforms[supportedInputIndex].m_axisTransforms.resize(2);
-        }
-    }
-
-    // Support transforms just one input.
-    virtual bool SupportsTransformOnInput(size_t inputIndex) override
-    {
-        return (inputIndex == supportedInputIndex);
-    }
-};
 
 // =======================================================================
 // PreComputedNodeBase -- interface implemented by ComputationNodes that precompute

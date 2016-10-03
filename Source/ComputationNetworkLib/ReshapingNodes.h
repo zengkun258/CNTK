@@ -412,15 +412,40 @@ template class SliceNode<double>;
 // CropNode
 //
 // Extracts portion of inputNode1 (input to be cropped) that corresponds to
-// inputNode2 (input that defines crop dimensions) dimensions starting at
-// (offsetX, offsetY) offset. Offsets must be given in absolute values.
+// inputNode2 (input that defines crop dimensions).
+
+// Cropping offsets can be given directly (offsetX, offsetY parameters in BS/NDL).
+// These offsets must be given in absolute values (pixels).
 //
 // Alternatively, offsets can be calculated automatically using network graph
-// and node transforms.
+// and node transforms. The offsets are computed by traversing the network graph
+// and finding common ancestor of crop node inputs. Once ancestor is found affine
+// transform is computed along the paths from first and second input to common
+// ancestor. Complete transform from one input to other it finally calculated
+// composing these two transforms. Translate components of final transform define
+// crop offsets.
+// Automatic crop calculation uses concept of equivalence nodes. Equivalence nodes
+// are sort of virtual common ancestors. For example two inputs to network may be
+// equivalent in spatial sense (for example input and target in case of pixelwise
+// semantic labeling) but they are separate leaf nodes which cannot be common
+// ancestors for inputs to crop node. However, they can be declared as equivalent
+// using equivalence nodes option.
+//
+// Usage (Both NDL and BS):
+//  CropNode(input1, input2, offsetX, offsetY) or
+//  CropNode(input1, input2) or
+//  CropNode(input1, input2, eqNode1, eqNode2) or
+// where:
+//  input1 - computation node to be cropped at given/calculated offsets with width and height taken from input2
+//  input2 - computation node that defines cropping shape (width and height to be used when cropping input1)
+//  offsetX - manually given absolute offset in pixels along x axis (must be used with type="manual")
+//  offsetY - manually given absolute offset in pixels along y axis (must be used with type="manual")
+//  eqNode1 - first equivalence node
+//  eqNode2 - second equivalence node
 // -----------------------------------------------------------------------
 
 template <class ElemType>
-class CropNode : public ComputationNode<ElemType>, public NumInputs<2>, public TransformerNode<CropNode<ElemType>>
+class CropNode : public ComputationNode<ElemType>, public TransformerNode
 {
     typedef ComputationNode<ElemType> Base;
     UsingComputationNodeMembersBoilerplate;
@@ -431,8 +456,6 @@ public:
     CropNode(DEVICEID_TYPE deviceId, const std::wstring& name);
 
     CropNode(size_t offsetX, size_t offsetY, DEVICEID_TYPE deviceId, const std::wstring& name);
-
-    CropNode(const wchar_t* eqNode1, const wchar_t* eqNode2, DEVICEID_TYPE deviceId, const wstring& name);
 
     CropNode(const ScriptableObjects::IConfigRecordPtr configp);
 
@@ -450,7 +473,7 @@ public:
 
 private:
     using ComputationNodeBase::GetInputs;
-    using TransformerNode<CropNode<ElemType>>::m_transforms;
+    using TransformerNode::m_transforms;
 
     // Declaration of matrix getting method to unify accessing values and gradients.
     typedef MatrixBasePtr(ComputationNode<ElemType>::*MatrixGetter)() const;
@@ -477,19 +500,15 @@ private:
     // Performs offsets computation if necessary.
     void ComputeCropOffsets();
 
-    virtual void /*ITransformerNode::*/ComputeTransforms() override;
+    virtual void /*TransformerNode::*/ComputeTransforms() override;
 
-    virtual bool /*ITransformerNode::*/SupportsTransformOnInput(size_t inputIndex) override;
+    virtual bool /*TransformerNode::*/SupportsTransformOnInput(size_t inputIndex) override;
 
 protected:
     // Offset along x axis. We need to store offsets as floats for precision if one crop node affects computation of other.
     double m_xOffset;
     // Offset along y axis.
     double m_yOffset;
-    // Equivalence node names (equivalence node are sort of virtual common ancestors).
-    std::wstring m_equivalenceNode1Name;
-    std::wstring m_equivalenceNode2Name;
-
 };
 
 // -----------------------------------------------------------------------

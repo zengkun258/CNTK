@@ -1593,7 +1593,7 @@ template class DropoutNode<double>;
 // -----------------------------------------------------------------------
 template <class ElemType>
 class BatchNormalizationNode : public ComputationNodeNonLooping<ElemType>, public NumInputs<5>, public IFreezable,
-    public IdentityTransformerNodeOnOneInput<BatchNormalizationNode<ElemType>, 0>
+    public IdentityTransformerNodeOnOneInput<0>
 {
     typedef ComputationNodeNonLooping<ElemType> Base; UsingComputationNodeMembersBoilerplate;
     static const std::wstring TypeName() { return L"BatchNormalization"; }

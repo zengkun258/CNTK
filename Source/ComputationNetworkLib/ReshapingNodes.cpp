@@ -484,26 +484,13 @@ template class ScatterPackedNode<float>;
 template class ScatterPackedNode<double>;
 
 // -----------------------------------------------------------------------
-// CropNode -- crop operation
-//
-// Usage (Both NDL and BS):
-//  CropNode(input1, input2, type="manual", offsetX, offsetY) or
-//  CropNode(input1, input2, type="auto") or
-//  CropNode(input1, input2, type="auto", eqNode1, eqNode2) or
-// where:
-//  input1 - computation node to be cropped
-//  input2 - computation node that defines cropping shape
-//  type - defines cropping type, either "manual" or "auto"
-//  offsetX - manually given offset along x axis (must be used with type="manual")
-//  offsetY - manually given offset along y axis (must be used with type="manual")
-//  eqNode1 - first equivalence node name
-//  eqNode2 - second equivalence node name
+// CropNode -- crop operation, crops first input according to shape of second
+//             input at offsets which are directly given or automatically calculated.
 // -----------------------------------------------------------------------
 
 template <class ElemType>
 CropNode<ElemType>::CropNode(DEVICEID_TYPE deviceId, const wstring& name)
-    : Base(deviceId, name), m_xOffset(numeric_limits<double>::max()), m_yOffset(numeric_limits<double>::max()),
-    m_equivalenceNode1Name(L""), m_equivalenceNode2Name(L"")
+    : Base(deviceId, name), m_xOffset(numeric_limits<double>::max()), m_yOffset(numeric_limits<double>::max())
 {
 }
 
@@ -511,70 +498,39 @@ template <class ElemType>
 CropNode<ElemType>::CropNode(size_t offsetX, size_t offsetY, DEVICEID_TYPE deviceId, const wstring& name)
     : CropNode(deviceId, name)
 {
-    m_xOffset = static_cast<double>(offsetX);
-    m_yOffset = static_cast<double>(offsetY);
-}
-
-template <class ElemType>
-CropNode<ElemType>::CropNode(const wchar_t* eqNode1, const wchar_t* eqNode2, DEVICEID_TYPE deviceId, const wstring& name)
-    : CropNode(deviceId, name)
-{
-    if (eqNode1 != nullptr && eqNode2 != nullptr)
-    {
-        // We have equivalence nodes given, save them. Equivalence nodes are sort of virtual common ancestors. For example
-        // two inputs to network may be equivalent in spatial sense but they are separate leaf nodes which cannot be
-        // common ancestors for inputs to crop node. However, they can be declared as equivalent using equivalence nodes option.
-        m_equivalenceNode1Name = eqNode1;
-        m_equivalenceNode2Name = eqNode2;
-    }
+    m_xOffset = (double)(offsetX);
+    m_yOffset = (double)(offsetY);
 }
 
 template <class ElemType>
 CropNode<ElemType>::CropNode(const ScriptableObjects::IConfigRecordPtr configp)
-    : CropNode(configp->Get(L"xOffset"), L"<placeholder>")
+    : CropNode(configp->Get(L"deviceId"), L"<placeholder>")
 {
-    if (!configp->Exists(L"type"))
-        RuntimeError("Crop node must have type parameter.");
+    // We may have 2 or 4 node inputs, check that and attach them.
+    const auto inputs = GetInputsFromConfig(configp);
+    if (inputs.size() != 2 && inputs.size() != 4)
+        LogicError("Crop node must have 2 or 4 node inputs.");
 
-    wstring type = configp->Get(L"type");
-    if (type == L"manual")
+    AttachInputs(inputs);
+
+    // Here we have 3 possibilities:
+    // 1. 2 input nodes -> auto crop calculation without equivalence nodes
+    // 2. 2 input nodes + 2 parameters -> manual crop with given offsets
+    // 3. 4 inputs -> auto crop calculation with equivalence nodes
+
+    if (inputs.size() == 2)
     {
-        // We expect offsets to be given directly. Check that both are given.
-        if (!configp->Exists(L"yOffset") || !configp->Exists(L"xOffset"))
-            RuntimeError("Both offsets must be given in crop node.");
-        m_xOffset = configp->Get(L"xOffset");
-        m_yOffset = configp->Get(L"yOffset");
-    }
-    else if (type == L"auto")
-    {
-        // In auto mode we will calculate crop offsets. Check if equivalence nodes are given.
-        if (configp->Exists(L"eqNode1"))
+        // We have 2 input nodes related to cropping (no equivalence node inputs given). Check if we have offsets
+        // directly given.
+        if (configp->Exists(L"yOffset") && configp->Exists(L"xOffset"))
         {
-            // Check that we have other equivalence node given as well.
-            if (configp->Exists(L"eqNode2"))
-            {
-                // We have equivalence nodes given, save them. Equivalence nodes are sort of virtual common ancestors.
-                // For example two inputs to network may be equivalent in spatial sense but they are separate leaf
-                // nodes which cannot be common ancestors for inputs to crop node. However, they can be declared as
-                // equivalent using equivalence nodes option.
-                m_equivalenceNode1Name = configp->Get(L"eqNode1").operator const wstring&();
-                m_equivalenceNode2Name = configp->Get(L"eqNode2").operator const wstring&();
-                if (m_equivalenceNode1Name.empty() || m_equivalenceNode2Name.empty())
-                    RuntimeError("Equivalence node name in crop node cannot be empty.");
-            }
-            else
-            {
-                RuntimeError("Both equivalence nodes must be given in crop node");
-            }
+            // We have manual crop with given offsets (option 2. above). Save given offsets.
+            m_xOffset = configp->Get(L"xOffset");
+            m_yOffset = configp->Get(L"yOffset");
         }
-        // else: no equivalence nodes gives, we will just not use them (we will search just for common ancestors).
+        // else: Offsets not given (option 1. above), we have automatic crop calculation without equivalence nodes.
     }
-    else
-    {
-        RuntimeError("Unknown type %ls in crop node.", type.c_str());
-    }
-
-    AttachInputsFromConfig(configp, this->GetExpectedNumInputs());
+    // else: We have 4 node inputs (option 3. above), we have automatic crop calculation with equivalence nodes.
 }
 
 template <class ElemType>
@@ -616,7 +572,7 @@ void CropNode<ElemType>::ForwardProp(const FrameRange& /*fr*/)
 {
     // Our offsets must be initialized here.
     if (m_xOffset == numeric_limits<double>::max() || m_yOffset == numeric_limits<double>::max())
-        RuntimeError("Automatic offsets calculation for crop is not implemented.");
+        LogicError("Crop offsets not initialized in ForwardProp.");
 
     // Retrieve input and output views for the values. Input and output views are tensor views
     // that define parts of first input and output that we operate on (we copy input from input view
@@ -653,8 +609,6 @@ void CropNode<ElemType>::Save(File& fstream) const
 
     fstream << m_xOffset;
     fstream << m_yOffset;
-    fstream << m_equivalenceNode1Name;
-    fstream << m_equivalenceNode2Name;
 }
 
 template <class ElemType>
@@ -664,8 +618,6 @@ void CropNode<ElemType>::Load(File& fstream, size_t modelVersion)
 
     fstream >> m_xOffset;
     fstream >> m_yOffset;
-    fstream >> m_equivalenceNode1Name;
-    fstream >> m_equivalenceNode2Name;
 }
 
 template <class ElemType>
@@ -677,8 +629,6 @@ void CropNode<ElemType>::CopyTo(ComputationNodeBasePtr nodeP, const wstring& new
         auto node = dynamic_pointer_cast<CropNode<ElemType>>(nodeP);
         node->m_xOffset = m_xOffset;
         node->m_yOffset = m_yOffset;
-        node->m_equivalenceNode1Name = m_equivalenceNode1Name;
-        node->m_equivalenceNode2Name = m_equivalenceNode2Name;
     }
 }
 
@@ -691,14 +641,14 @@ typename CropNode<ElemType>::CroppedIOViews CropNode<ElemType>::CreateIOViews(Ma
 
     // Calculate cropped shape of the input.
     TensorShape inputShapeCropped = inputShape0;
-    inputShapeCropped.NarrowTo(0, static_cast<size_t>(m_xOffset), static_cast<size_t>(m_xOffset) + inputShape1.GetDim(0));
-    inputShapeCropped.NarrowTo(1, static_cast<size_t>(m_yOffset), static_cast<size_t>(m_yOffset) + inputShape1.GetDim(1));
+    inputShapeCropped.NarrowTo(0, (size_t)(m_xOffset), (size_t)(m_xOffset) + inputShape1.GetDim(0));
+    inputShapeCropped.NarrowTo(1, (size_t)(m_yOffset), (size_t)(m_yOffset) + inputShape1.GetDim(1));
 
     // Get output shape.
     TensorShape outputShape = GetTensorShape(GetSampleLayout().GetRank());
     // Cropped input and output dimensions must be same.
     if (inputShapeCropped.GetDims() != outputShape.GetDims())
-        RuntimeError("Cropped input and output must have same rank.");
+        LogicError("Cropped input and output must have same rank.");
 
     // Create proper views using calculated shapes.
     return CroppedIOViews(this, matrixGetter, inputShapeCropped, outputShape);
@@ -714,10 +664,10 @@ void CropNode<ElemType>::ComputeCropOffsets()
     // Helper method for traversing the tree and calculating node transforms.
     auto ProcessInputs = [](ComputationNodeBase* currNode, stack<ComputationNodeBase*>& traversalStack, unordered_map<ComputationNodeBase*, SpaceTransform>& nodeToTransformMap)
     {
-        if (!currNode->Is<ITransformerNode>())
+        if (!currNode->Is<TransformerNode>())
             RuntimeError("Node does not support affine transform for cropping.");
 
-        auto transformerNode = currNode->As<ITransformerNode>();
+        auto transformerNode = currNode->As<TransformerNode>();
         // Go over the nodes inputs.
         for (size_t i = 0; i < currNode->GetNumInputs(); i++)
         {
@@ -764,7 +714,14 @@ void CropNode<ElemType>::ComputeCropOffsets()
     // Maps node to transform between its output and crop node.
     unordered_map<ComputationNodeBase*, SpaceTransform> nodeToCropInput0TransformMap;
     unordered_map<ComputationNodeBase*, SpaceTransform> nodeToCropInput1TransformMap;
+    // Take equivalence nodes if provided.
     ComputationNodeBase* equivalenceNode1 = nullptr;
+    ComputationNodeBase* equivalenceNode2 = nullptr;
+    if (GetInputs().size() == 4)
+    {
+        equivalenceNode1 = GetInputs()[2].get();
+        equivalenceNode2 = GetInputs()[3].get();
+    }
 
     // Push first input to traversal stack to start exploring paths starting from there.
     traversalStack.push(GetInputs()[0].get());
@@ -775,16 +732,8 @@ void CropNode<ElemType>::ComputeCropOffsets()
     {
         ComputationNodeBase* currNode = traversalStack.top();
         traversalStack.pop();
-        if (currNode->GetName() == m_equivalenceNode1Name)
-        {
-            if (equivalenceNode1 != nullptr)
-                RuntimeError("Two equivalence nodes with the same name found.");
-            equivalenceNode1 = currNode;
-        }
         ProcessInputs(currNode, traversalStack, nodeToCropInput0TransformMap);
     }
-    if (m_equivalenceNode1Name != L"" && equivalenceNode1 == nullptr)
-        RuntimeError("Equivalence node 1 not found in crop node.");
 
     // Now traverse from second input.
     traversalStack.push(GetInputs()[1].get());
@@ -806,13 +755,13 @@ void CropNode<ElemType>::ComputeCropOffsets()
             firstInputTransform = &it->second;
         }
         // Check if node is equivalent to one from the first subtree (path connected over equivalence nodes).
-        else if (currNode->GetName() == m_equivalenceNode2Name)
+        else if (currNode == equivalenceNode2)
         {
             // We have closed the path between nodes using equivalence nodes, save the first equivalence node transform.
             firstInputTransform = &nodeToCropInput0TransformMap.find(equivalenceNode1)->second;
         }
 
-        if (firstInputTransform != nullptr)
+        if (firstInputTransform)
         {
             // Calculate final transform.
             SpaceTransform finalTransform = nodeToCropInput1TransformMap.find(currNode)->second.Compose(firstInputTransform->Inverse());

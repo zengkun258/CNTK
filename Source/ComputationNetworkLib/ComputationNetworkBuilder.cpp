@@ -373,15 +373,21 @@ shared_ptr<ComputationNode<ElemType>> ComputationNetworkBuilder<ElemType>::Avera
 }
 
 template <class ElemType>
+shared_ptr<ComputationNode<ElemType>> ComputationNetworkBuilder<ElemType>::Crop(const ComputationNodePtr input1, const ComputationNodePtr input2, const std::wstring nodeName)
+{
+    return net.AddNodeToNetAndAttachInputs(New<CropNode<ElemType>>(net.GetDeviceId(), nodeName), { input1, input2 });
+}
+
+template <class ElemType>
 shared_ptr<ComputationNode<ElemType>> ComputationNetworkBuilder<ElemType>::Crop(const ComputationNodePtr input1, const ComputationNodePtr input2, size_t offsetX, size_t offsetY, const std::wstring nodeName)
 {
     return net.AddNodeToNetAndAttachInputs(New<CropNode<ElemType>>(offsetX, offsetY, net.GetDeviceId(), nodeName), { input1, input2 });
 }
 
 template <class ElemType>
-shared_ptr<ComputationNode<ElemType>> ComputationNetworkBuilder<ElemType>::Crop(const ComputationNodePtr input1, const ComputationNodePtr input2, const wchar_t* eqNode1, const wchar_t* eqNode2, const std::wstring nodeName)
+shared_ptr<ComputationNode<ElemType>> ComputationNetworkBuilder<ElemType>::Crop(const ComputationNodePtr input1, const ComputationNodePtr input2, const ComputationNodePtr eqNode1, const ComputationNodePtr eqNode2, const std::wstring nodeName)
 {
-    return net.AddNodeToNetAndAttachInputs(New<CropNode<ElemType>>(eqNode1, eqNode2, net.GetDeviceId(), nodeName), { input1, input2 });
+    return net.AddNodeToNetAndAttachInputs(New<CropNode<ElemType>>(net.GetDeviceId(), nodeName), { input1, input2, eqNode1, eqNode2 });
 }
 
 template <class ElemType>
