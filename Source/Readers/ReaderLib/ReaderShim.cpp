@@ -114,7 +114,7 @@ void ReaderShim<ElemType>::StartDistributedMinibatchLoop(
         m_prefetchBuffers[i.GetStreamName()] = StreamPrefetchBuffer
         {
             std::make_shared<Matrix<ElemType>>(0, 0, i.GetDeviceId(), i.GetMatrixType(), i.GetMatrixFormat()),
-            nullptr
+            std::make_shared<MBLayout>()
         };
     }
 
@@ -258,6 +258,10 @@ bool ReaderShim<ElemType>::GetMinibatch(StreamMinibatchInputs& matrices)
 template <class ElemType>
 typename ReaderShim<ElemType>::PrefetchResult ReaderShim<ElemType>::PrefetchMinibatch(size_t currentDataTransferIndex)
 {
+    // Resetting layouts.
+    for (auto& mx : m_prefetchBuffers)
+        mx.second.m_mbLayout->Init(1, 0);
+
     Minibatch minibatch = m_reader->ReadMinibatch();
 
     // If there is no data we can simply return.
