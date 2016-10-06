@@ -40,6 +40,7 @@ PROJ_LIB_PATH = os.path.join(os.path.dirname(__file__), "cntk", "libs")
 if 'CNTK_LIB_PATH' in os.environ:
     CNTK_LIB_PATH = os.environ['CNTK_LIB_PATH']
 else:
+    # Assumes GPU SKU is being built
     if IS_WINDOWS:
         CNTK_LIB_PATH = os.path.join(CNTK_PATH, "x64", "Release")
     else:
@@ -92,6 +93,11 @@ for fn in rt_libs:
     src_file = lib_path(fn)
     tgt_file = proj_lib_path(fn)
     shutil.copy(src_file, tgt_file)
+
+if 'CNTK_EXTRA_LIBRARIES' in os.environ:
+    for lib in os.environ['CNTK_EXTRA_LIBRARIES'].split():
+        shutil.copy(lib, PROJ_LIB_PATH)
+        rt_libs.append(strip_path(lib))
 
 # For package_data we need to have names relative to the cntk module.
 rt_libs = [os.path.join('libs', fn) for fn in rt_libs]

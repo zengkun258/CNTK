@@ -10,10 +10,11 @@
 configure=$0
 build_top=$PWD
 
-have_cuda=no
 cuda_path=
 cuda_check=include/cuda.h
 enable_cuda=
+
+enable_python=
 
 # CNTK Custom MKL Version
 cntk_custom_mkl_version=2
@@ -203,6 +204,17 @@ function default_use_cuda ()
 }
 enable_cuda=$(default_use_cuda)
 
+function default_python ()
+{
+    if which python swig 1> /dev/null
+    then
+        echo yes
+    else
+        echo no
+    fi
+}
+enable_python=$(default_python)
+
 function show_default ()
 {
     if test x$1 = x
@@ -222,6 +234,7 @@ function show_help ()
     echo "  --add directory add directory to library search path"
     echo "  --1bitsgd[=(yes|no)] use 1Bit SGD $(show_default ${default_use_1bitsgd})"
     echo "  --cuda[=(yes|no)] use cuda GPU $(show_default $(default_use_cuda))"
+    echo "  --python[=(yes|no)] with Python bindings $(show_default $(default_python))"
     echo "  --with-cuda[=directory] $(show_default $(find_cuda))"
     echo "  --with-cub[=directory] $(show_default $(find_cub))"
     echo "  --with-gdk-include[=directory] $(show_default $(find_gdk_include))"
@@ -304,8 +317,18 @@ do
             fi
             ;;
 
+        --python*)
+            if test x$optarg = xyes || test x$optarg = xno
+            then
+                enable_python=$optarg
+            else
+                echo "Invalid value for --python $optarg"
+                show_help
+                exit
+            fi
+            ;;
+
         --with-cuda*)
-            have_cuda=yes
             enable_cuda=yes
             if test x$optarg = x
             then
@@ -645,6 +668,15 @@ then
     fi
 fi
 
+if test $enable_python = yes
+then
+    if test x$(default_python) = xno ; then
+        echo python or swig not in path.
+        echo Python support will NOT be build.
+        enable_python=no
+    fi
+fi
+
 if test x$opencv_path = x
 then
     opencv_path=$(find_opencv)
@@ -711,6 +743,9 @@ if test $enable_cuda = yes ; then
     echo GDK_NVML_LIB_PATH=$gdk_nvml_lib_path >> $config
     echo CUB_PATH=$cub_path >> $config
     echo CUDNN_PATH=$cudnn_path >> $config
+fi
+if test $enable_python = yes ; then
+    echo PYTHON_SUPPORT=true >> $config
 fi
 if test x$kaldi_path != x ; then
     echo KALDI_PATH=$kaldi_path >> $config

@@ -35,6 +35,7 @@
 #     defaults to /usr/local/
 #   BOOST_PATH= path to Boost installation, so $(BOOST_PATH)/include/boost/test/unit_test.hpp
 #     defaults to /usr/local/boost-1.60.0
+#   PYTHON_SUPPORT=true iff CNTK v2 Python modulke should be build
 # These can be overridden on the command line, e.g. make BUILDTYPE=debug
 
 # TODO: Build static libraries for common dependencies that are shared by multiple 
@@ -75,7 +76,7 @@ COMMON_FLAGS:= -D_POSIX_SOURCE -D_XOPEN_SOURCE=600 -D__USE_XOPEN2K -std=c++11
 CPPFLAGS:= 
 CXXFLAGS:= -msse4.1 -mssse3 -std=c++0x -fopenmp -fpermissive -fPIC -Werror -fcheck-new
 LIBPATH:=
-LIBS:=
+LIBS_LIST:=
 LDFLAGS:=
 
 CXXVER_GE480:= $(shell expr `$(CXX) -dumpversion | sed -e 's/\.\([0-9][0-9]\)/\1/g' -e 's/\.\([0-9]\)/0\1/g' -e 's/^[0-9]\{3,4\}$$/&00/'` \>= 40800)
@@ -85,6 +86,8 @@ endif
 
 SEPARATOR = "=-----------------------------------------------------------="
 ALL:=
+ALL_LIBS:=
+LIBS_FULLPATH:=
 SRC:=
 
 # Make sure all is the first (i.e. default) target, but we can't actually define it
@@ -120,13 +123,13 @@ ifdef CUDA_PATH
 # Set up CUDA includes and libraries
   INCLUDEPATH += $(CUDA_PATH)/include
   LIBPATH += $(CUDA_PATH)/lib64
-  LIBS += -lcublas -lcudart -lcuda -lcurand -lcusparse -lnvidia-ml
+  LIBS_LIST += cublas cudart cuda curand cusparse nvidia-ml
 
 # Set up cuDNN if needed
   ifdef CUDNN_PATH
     INCLUDEPATH += $(CUDNN_PATH)/cuda/include
     LIBPATH += $(CUDNN_PATH)/cuda/lib64
-    LIBS += -lcudnn
+    LIBS_LIST += cudnn
     COMMON_FLAGS +=-DUSE_CUDNN
   endif
 else
@@ -137,13 +140,13 @@ endif
 
 ifeq ("$(MATHLIB)","mkl")
   INCLUDEPATH += $(MKL_PATH)/$(CNTK_CUSTOM_MKL_VERSION)/include
-  LIBS += -lm
+  LIBS_LIST += m
 ifeq ("$(MKL_THREADING)","sequential")
   LIBPATH += $(MKL_PATH)/$(CNTK_CUSTOM_MKL_VERSION)/x64/sequential
-  LIBS += -lmkl_cntk_s
+  LIBS_LIST += mkl_cntk_s
 else
   LIBPATH += $(MKL_PATH)/$(CNTK_CUSTOM_MKL_VERSION)/x64/parallel
-  LIBS += -lmkl_cntk_p -liomp5 -lpthread
+  LIBS_LIST += mkl_cntk_p iomp5 pthread
 endif
   COMMON_FLAGS += -DUSE_MKL
 endif
@@ -151,7 +154,7 @@ endif
 ifeq ("$(MATHLIB)","openblas")
   INCLUDEPATH += $(OPENBLAS_PATH)/include
   LIBPATH += $(OPENBLAS_PATH)/lib
-  LIBS += -lopenblas -lm -lpthread
+  LIBS_LIST += openblas m pthread
   CPPFLAGS += -DUSE_OPENBLAS
 endif
 
@@ -162,10 +165,11 @@ ifdef KALDI_PATH
   ATLASINC = $(KALDI_PATH)/tools/ATLAS/include
 
   INCLUDEPATH += $(KALDI_PATH)/src $(ATLASINC) $(FSTROOT)/include
-  CPPFLAGS+= -DKALDI_DOUBLEPRECISION=0 -DHAVE_POSIX_MEMALIGN -DHAVE_EXECINFO_H=1 -DHAVE_CXXABI_H -DHAVE_ATLAS -DHAVE_OPENFST_GE_10400
+  CPPFLAGS += -DKALDI_DOUBLEPRECISION=0 -DHAVE_POSIX_MEMALIGN -DHAVE_EXECINFO_H=1 -DHAVE_CXXABI_H -DHAVE_ATLAS -DHAVE_OPENFST_GE_10400
 
   KALDI_LIBPATH += $(KALDI_PATH)/src/lib
-  KALDI_LIBS += -lkaldi-util -lkaldi-matrix -lkaldi-base -lkaldi-hmm -lkaldi-cudamatrix -lkaldi-nnet -lkaldi-lat
+  KALDI_LIBS_LIST := kaldi-util kaldi-matrix kaldi-base kaldi-hmm kaldi-cudamatrix kaldi-nnet kaldi-lat
+  KALDI_LIBS := $(addprefix -l,$(KALDI_LIBS_LIST))
 endif
 
 ifdef SUPPORT_AVX2
@@ -219,11 +223,14 @@ ifdef CNTK_CUDA_DEVICE_DEBUGINFO
   CUFLAGS += -G
 endif
 
-#######
+# Create the library link options for the linker.
+# LIBS_LIST must not be changed beyond this point.
+LIBS:= $(addprefix -l,$(LIBS_LIST))
 
 OBJDIR:= $(BUILD_TOP)/.build
 BINDIR:= $(BUILD_TOP)/bin
 LIBDIR:= $(BUILD_TOP)/lib
+PYTHONDIR:= $(BUILD_TOP)/python
 
 ORIGINLIBDIR:='$$ORIGIN/../lib'
 ORIGINDIR:='$$ORIGIN'
@@ -324,7 +331,7 @@ MATH_SRC+=$(READER_SRC)
 MATH_OBJ := $(patsubst %.cu, $(OBJDIR)/%.o, $(patsubst %.cpp, $(OBJDIR)/%.o, $(MATH_SRC)))
 
 CNTKMATH_LIB:= $(LIBDIR)/lib$(CNTKMATH).so
-ALL += $(CNTKMATH_LIB)
+ALL_LIBS += $(CNTKMATH_LIB)
 SRC+=$(MATH_SRC)
 
 $(CNTKMATH_LIB): $(MATH_OBJ)
@@ -396,7 +403,7 @@ CNTKLIBRARY:=cntklibrary-$(CNTKLIBRARY_VERSION)
 CNTKLIBRARY_OBJ := $(patsubst %.cu, $(OBJDIR)/%.o, $(patsubst %.cpp, $(OBJDIR)/%.o, $(CNTKLIBRARY_SRC)))
 
 CNTKLIBRARY_LIB:=$(LIBDIR)/lib$(CNTKLIBRARY).so
-ALL+=$(CNTKLIBRARY_LIB)
+ALL_LIBS+=$(CNTKLIBRARY_LIB)
 SRC+=$(CNTKLIBRARY_SRC)
 
 $(CNTKLIBRARY_LIB): $(CNTKLIBRARY_OBJ) | $(CNTKMATH_LIB)
@@ -467,7 +474,7 @@ EVAL_SRC+=$(SEQUENCE_TRAINING_LIB_SRC)
 EVAL_OBJ:=$(patsubst %.cu, $(OBJDIR)/%.o, $(patsubst %.cpp, $(OBJDIR)/%.o, $(EVAL_SRC)))
 
 EVAL_LIB:=$(LIBDIR)/lib$(EVAL).so
-ALL+=$(EVAL_LIB)
+ALL_LIBS+=$(EVAL_LIB)
 SRC+=$(EVAL_SRC)
 
 $(EVAL_LIB): $(EVAL_OBJ) | $(CNTKMATH_LIB)
@@ -508,7 +515,7 @@ BINARYREADER_OBJ := $(patsubst %.cpp, $(OBJDIR)/%.o, $(BINARYREADER_SRC))
 
 BINARY_READER:= $(LIBDIR)/BinaryReader.so
 
-#ALL += $(BINARY_READER)
+#ALL_LIBS += $(BINARY_READER)
 #SRC+=$(BINARYREADER_SRC)
 
 $(BINARY_READER): $(BINARYREADER_OBJ) | $(CNTKMATH_LIB)
@@ -528,7 +535,7 @@ HTKMLFREADER_SRC =\
 HTKMLFREADER_OBJ := $(patsubst %.cpp, $(OBJDIR)/%.o, $(HTKMLFREADER_SRC))
 
 HTKMLFREADER:=$(LIBDIR)/HTKMLFReader.so
-ALL+=$(HTKMLFREADER)
+ALL_LIBS+=$(HTKMLFREADER)
 SRC+=$(HTKMLFREADER_SRC)
 
 $(LIBDIR)/HTKMLFReader.so: $(HTKMLFREADER_OBJ) | $(CNTKMATH_LIB)
@@ -546,7 +553,7 @@ COMPOSITEDATAREADER_SRC =\
 COMPOSITEDATAREADER_OBJ := $(patsubst %.cpp, $(OBJDIR)/%.o, $(COMPOSITEDATAREADER_SRC))
 
 COMPOSITEDATAREADER:=$(LIBDIR)/CompositeDataReader.so
-ALL+=$(COMPOSITEDATAREADER)
+ALL_LIBS+=$(COMPOSITEDATAREADER)
 SRC+=$(COMPOSITEDATAREADER_SRC)
 
 $(LIBDIR)/CompositeDataReader.so: $(COMPOSITEDATAREADER_OBJ) | $(CNTKMATH_LIB)
@@ -569,7 +576,7 @@ HTKDESERIALIZERS_SRC =\
 HTKDESERIALIZERS_OBJ := $(patsubst %.cpp, $(OBJDIR)/%.o, $(HTKDESERIALIZERS_SRC))
 
 HTKDESERIALIZERS:=$(LIBDIR)/HTKDeserializers.so
-ALL+=$(HTKDESERIALIZERS)
+ALL_LIBS+=$(HTKDESERIALIZERS)
 SRC+=$(HTKDESERIALIZERS_SRC)
 
 $(LIBDIR)/HTKDeserializers.so: $(HTKDESERIALIZERS_OBJ) | $(CNTKMATH_LIB)
@@ -589,7 +596,7 @@ LMSEQUENCEREADER_SRC =\
 LMSEQUENCEREADER_OBJ := $(patsubst %.cpp, $(OBJDIR)/%.o, $(LMSEQUENCEREADER_SRC))
 
 LMSEQUENCEREADER:= $(LIBDIR)/LMSequenceReader.so
-ALL+=$(LMSEQUENCEREADER)
+ALL_LIBS+=$(LMSEQUENCEREADER)
 SRC+=$(LMSEQUENCEREADER_SRC)
 
 $(LMSEQUENCEREADER): $(LMSEQUENCEREADER_OBJ) | $(CNTKMATH_LIB)
@@ -610,7 +617,7 @@ LUSEQUENCEREADER_SRC =\
 LUSEQUENCEREADER_OBJ := $(patsubst %.cpp, $(OBJDIR)/%.o, $(LUSEQUENCEREADER_SRC))
 
 LUSEQUENCEREADER:=$(LIBDIR)/LUSequenceReader.so
-ALL+=$(LUSEQUENCEREADER)
+ALL_LIBS+=$(LUSEQUENCEREADER)
 SRC+=$(LUSEQUENCEREADER_SRC)
 
 $(LUSEQUENCEREADER): $(LUSEQUENCEREADER_OBJ) | $(CNTKMATH_LIB)
@@ -629,7 +636,7 @@ UCIFASTREADER_SRC =\
 UCIFASTREADER_OBJ := $(patsubst %.cpp, $(OBJDIR)/%.o, $(UCIFASTREADER_SRC))
 
 UCIFASTREADER:=$(LIBDIR)/UCIFastReader.so
-ALL += $(UCIFASTREADER)
+ALL_LIBS += $(UCIFASTREADER)
 SRC+=$(UCIFASTREADER_SRC)
 
 $(UCIFASTREADER): $(UCIFASTREADER_OBJ) | $(CNTKMATH_LIB)
@@ -647,7 +654,7 @@ LIBSVMBINARYREADER_SRC =\
 LIBSVMBINARYREADER_OBJ := $(patsubst %.cpp, $(OBJDIR)/%.o, $(LIBSVMBINARYREADER_SRC))
 
 LIBSVMBINARYREADER:=$(LIBDIR)/LibSVMBinaryReader.so
-ALL += $(LIBSVMBINARYREADER)
+ALL_LIBS += $(LIBSVMBINARYREADER)
 SRC+=$(LIBSVMBINARYREADER_SRC)
 
 $(LIBSVMBINARYREADER): $(LIBSVMBINARYREADER_OBJ) | $(CNTKMATH_LIB)
@@ -665,7 +672,7 @@ SPARSEPCREADER_SRC =\
 SPARSEPCREADER_OBJ := $(patsubst %.cpp, $(OBJDIR)/%.o, $(SPARSEPCREADER_SRC))
 
 SPARSEPCREADER:=$(LIBDIR)/SparsePCReader.so
-ALL += $(SPARSEPCREADER)
+ALL_LIBS += $(SPARSEPCREADER)
 SRC+=$(SPARSEPCREADER_SRC)
 
 $(SPARSEPCREADER): $(SPARSEPCREADER_OBJ) | $(CNTKMATH_LIB)
@@ -686,7 +693,7 @@ CNTKTEXTFORMATREADER_SRC =\
 CNTKTEXTFORMATREADER_OBJ := $(patsubst %.cpp, $(OBJDIR)/%.o, $(CNTKTEXTFORMATREADER_SRC))
 
 CNTKTEXTFORMATREADER:=$(LIBDIR)/CNTKTextFormatReader.so
-ALL += $(CNTKTEXTFORMATREADER)
+ALL_LIBS += $(CNTKTEXTFORMATREADER)
 SRC+=$(CNTKTEXTFORMATREADER_SRC)
 
 $(CNTKTEXTFORMATREADER): $(CNTKTEXTFORMATREADER_OBJ) | $(CNTKMATH_LIB)
@@ -711,7 +718,7 @@ KALDI2READER_SRC = \
 KALDI2READER_OBJ := $(patsubst %.cpp, $(OBJDIR)/%.o, $(KALDI2READER_SRC))
 
 KALDI2READER:=$(LIBDIR)/Kaldi2Reader.so
-ALL+=$(KALDI2READER)
+ALL_LIBS+=$(KALDI2READER)
 SRC+=$(KALDI2READER_SRC)
 
 $(KALDI2READER): $(KALDI2READER_OBJ) | $(CNTKMATH_LIB)
@@ -729,16 +736,17 @@ ifdef BOOST_PATH
 
 INCLUDEPATH += $(BOOST_PATH)/include
 
-IMAGE_READER_LIBS += -lopencv_core -lopencv_imgproc -lopencv_imgcodecs
+IMAGEREADER_LIBS_LIST := opencv_core opencv_imgproc opencv_imgcodecs
 
 ifdef LIBZIP_PATH
   CPPFLAGS += -DUSE_ZIP
-  #both directories are needed for building libzip
-  INCLUDEPATH += $(LIBZIP_PATH)/include
-  INCLUDEPATH += $(LIBZIP_PATH)/lib/libzip/include
-  IMAGE_READER_LIBS += -lzip
+  # Both directories are needed for building libzip
+  INCLUDEPATH += $(LIBZIP_PATH)/include $(LIBZIP_PATH)/lib/libzip/include
   LIBPATH += $(LIBZIP_PATH)/lib
+  IMAGEREADER_LIBS_LIST += zip
 endif
+
+IMAGEREADER_LIBS:= $(addprefix -l,$(IMAGEREADER_LIBS_LIST))
 
 IMAGEREADER_SRC =\
   $(SOURCEDIR)/Readers/ImageReader/Exports.cpp \
@@ -751,7 +759,7 @@ IMAGEREADER_SRC =\
 IMAGEREADER_OBJ := $(patsubst %.cpp, $(OBJDIR)/%.o, $(IMAGEREADER_SRC))
 
 IMAGEREADER:=$(LIBDIR)/ImageReader.so
-ALL += $(IMAGEREADER)
+ALL_LIBS += $(IMAGEREADER)
 SRC+=$(IMAGEREADER_SRC)
 
 INCLUDEPATH += $(OPENCV_PATH)/include
@@ -759,7 +767,7 @@ LIBPATH += $(OPENCV_PATH)/lib $(OPENCV_PATH)/release/lib
 
 $(IMAGEREADER): $(IMAGEREADER_OBJ) | $(CNTKMATH_LIB)
 	@echo $(SEPARATOR)
-	$(CXX) $(LDFLAGS) -shared $(patsubst %,-L%, $(LIBDIR) $(LIBPATH)) $(patsubst %,$(RPATH)%, $(ORIGINDIR) $(LIBPATH)) -o $@ $^ -l$(CNTKMATH) $(IMAGE_READER_LIBS)
+	$(CXX) $(LDFLAGS) -shared $(patsubst %,-L%, $(LIBDIR) $(LIBPATH)) $(patsubst %,$(RPATH)%, $(ORIGINDIR) $(LIBPATH) $(LIBPATH)) -o $@ $^ -l$(CNTKMATH) $(IMAGEREADER_LIBS)
 endif
 endif
 
@@ -971,11 +979,44 @@ unittests: $(UNITTEST_EVAL) $(UNITTEST_READER) $(UNITTEST_NETWORK) $(UNITTEST_MA
 
 endif
 
+ifeq ("$(PYTHON_SUPPORT)","true")
+
+# Libraries needed for the run-time (i.e., excluding test binaries)
+# TODO MPI doesn't appear explicitly here, hidden by mpic++ usage (but currently, it should be user installed)
+RUNTIME_LIBS_LIST := $(LIBS_LIST) $(IMAGEREADER_LIBS_LIST) $(KALDI_LIBS_LIST)
+RUNTIME_LIBS_EXCLUDE_LIST := m pthread nvidia-ml
+EXTRA_LIBS_BASENAMES:=$(addsuffix .so,$(addprefix lib,$(filter-out $(RUNTIME_LIBS_EXCLUDE_LIST),$(RUNTIME_LIBS_LIST))))
+
+# TODO dependencies
+# TODO intermediate build results should go below $OBJDIR
+.PHONY: python
+python: $(ALL_LIBS)
+	@bash -c '\
+            set -x; \
+            export LD_LIBRARY_PATH=$$(echo $(LIBPATH) $(KALDI_LIBPATH) | tr " " :); \
+            ! (ldd $(LIBDIR)/* | grep  "not found") && \
+            export CNTK_EXTRA_LIBRARIES=$$(ldd $(LIBDIR)/* | grep "^\s.*=> " | cut -d ">" -f 2- --only-delimited | cut -d "(" -f 1 --only-delimited | sort -u | grep -Ff <(echo $(EXTRA_LIBS_BASENAMES) | xargs -n1)) && \
+            which python swig 1> /dev/null && \
+            export CNTK_LIB_PATH=$$(readlink -f $(LIBDIR)) && \
+            PYTHONDIR=$$(readlink -f $(PYTHONDIR)) && \
+            test $$? -eq 0 && \
+            cd bindings/python && \
+            python setup.py \
+                build_ext \
+                bdist_wheel \
+                    --dist-dir $$PYTHONDIR'
+
+ALL += python
+
+endif
+
 ########################################
 # General compile and dependency rules
 ########################################
 
-VPATH := $(sort  $(dir $(SRC)))
+ALL += $(ALL_LIBS)
+
+VPATH := $(sort $(dir $(SRC)))
 
 # Define object files
 OBJ := $(patsubst %.cu, $(OBJDIR)/%.o, $(patsubst %.cpp, $(OBJDIR)/%.o, $(SRC)))
