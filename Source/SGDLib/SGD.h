@@ -477,7 +477,7 @@ protected:
                          /*out*/ EpochCriterion& epochCriterion,
                          /*out*/ std::vector<EpochCriterion>& epochEvalErrors,
                          const std::string& prefixMsg = "",
-                         const size_t maxNumberOfSamples = std::numeric_limits<size_t>().max());
+                         const size_t maxNumberOfSamples = SIZE_MAX);
 
     void InitDistGradAgg(int numEvalNodes, int numGradientBits, int traceLevel);
     void InitModelAggregationHandler(int traceLevel, DEVICEID_TYPE devID);

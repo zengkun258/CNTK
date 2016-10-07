@@ -817,7 +817,7 @@ size_t SGD<ElemType>::TrainOneEpoch(ComputationNetworkPtr net,
                                     /*out*/ EpochCriterion& epochCriterion,
                                     /*out*/ std::vector<EpochCriterion>& epochEvalErrors,
                                     const std::string& prefixMsg,
-                                    const size_t maxNumberOfSamples /* = std::numeric_limits<size_t>().max()*/)
+                                    const size_t maxNumberOfSamples)
 {
     ScopedNetworkOperationMode modeGuard(net, NetworkOperationMode::training);
 
@@ -954,17 +954,17 @@ size_t SGD<ElemType>::TrainOneEpoch(ComputationNetworkPtr net,
     // In case adaptive minibatch/learning rates are used, the training can be limited by the maxNumberOfSamples.
     bool trainingFinished = false;
     size_t epochStartSample = 0;
-    bool shouldCheckEarlyExit = maxNumberOfSamples != std::numeric_limits<size_t>().max();
+    bool shouldCheckEarlyExit = maxNumberOfSamples != SIZE_MAX;
     if (shouldCheckEarlyExit)
     {
-        // Some old readers do not implement GetCurrentSamplePosition()
-        // for those adaptive minibatch size is not supported. But they can be used for usual training.
+        // SparsePC, LibSCV and DSS readers do not implement GetCurrentSamplePosition()
+        // for those adaptive minibatch size is not supported, thus specifying adaptive 
+        // minibatch for them will cause an error message.
         epochStartSample = trainSetDataReader->GetCurrentSamplePosition();
     }
 
     bool noMoreSamplesToProcess = false;
     bool isFirstMinibatch = true;
-
     for (;;)
     {
         // Per-minibatch performance measurements; only enabled when perfTraceLevel > 0
