@@ -196,7 +196,7 @@ protected:
     bool m_gradientClippingWithTruncation;
     double m_clippingThresholdPerSample;
 
-    intargvector m_numMiniBatch4LRSearch;
+    intargvector m_numSamples4Search;
     size_t m_numBestSearchEpoch;
 
     LearningRateSearchAlgorithm m_autoLearnRateSearchType;

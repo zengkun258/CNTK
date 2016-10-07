@@ -475,7 +475,7 @@ void SGD<ElemType>::TrainOrAdaptModel(int startEpoch, ComputationNetworkPtr net,
         // the last minibatch size, or we use tuning to try and find a better one.
         if (m_autoAdjustMinibatch && i >= m_mbSize.size())
         {
-            size_t numFramesToUseInSearch = m_numMiniBatch4LRSearch[i] * m_mbSize[i];
+            size_t numFramesToUseInSearch = m_numSamples4Search[i];
             if (m_epochSize != requestDataSize)
             {
                 // ensure the numFramesToUseInSearch does not exceed the total number of frames in the epoch
@@ -1517,7 +1517,7 @@ double SGD<ElemType>::SearchForBestLearnRate(ComputationNetworkPtr net,
 {
     double bestLearnRatePerSample = curLearnRate;
 
-    size_t numFramesToUseInSearch = m_numMiniBatch4LRSearch[epochNumber] * m_mbSize[epochNumber];
+    size_t numFramesToUseInSearch = m_numSamples4Search[epochNumber];
     if (m_epochSize != requestDataSize)
     {
         // ensure the numFramesToUseInSearch does not exceed the total number of frames in the epoch
@@ -2517,11 +2517,6 @@ SGDParams::SGDParams(const ConfigRecordType& configSGD, size_t sizeofElemType)
     m_minibatchSizeTuningMax = configAALR(L"minibatchSizeTuningMax", (size_t) 1048576);
     m_minibatchSearchCriterionErrorMargin = configAALR(L"minibatchSearchCriterionErrorMargin", (size_t) 1);
 
-    // the number of minibatches used to search
-    // the learning rate. It's typically set to 10-20% of
-    // the total minibatches in an epoch.
-    m_numMiniBatch4LRSearch = configAALR(L"numMiniBatch4LRSearch", ConfigRecordType::Array(intargvector(vector<int>{500})));
-
     m_numPrevLearnRates = configAALR(L"numPrevLearnRates", (size_t) 5);
     m_numBestSearchEpoch = configAALR(L"numBestSearchEpoch", (size_t) 1);
     m_loadBestModel = configAALR(L"loadBestModel", true);
@@ -2535,6 +2530,26 @@ SGDParams::SGDParams(const ConfigRecordType& configSGD, size_t sizeofElemType)
     m_truncated = configSGD(L"truncated", false);
     m_maxSamplesInRAM = configSGD(L"maxSamplesInRAM", (size_t) SIZE_MAX);
     m_numSubminiBatches = configSGD(L"numSubminibatches", (size_t) 1);
+
+    if (configAALR.Exists(L"numMiniBatch4LRSearch"))
+    {
+        LOGPRINTF(stderr, "WARNING: 'numMiniBatch4LRSearch' is deprecated, please remove it and use 'numSamples4Search' instead.\n");
+        // the number of minibatches used to search
+        // the learning rate. It's typically set to 10-20% of
+        // the total minibatches in an epoch.
+        auto numMiniBatch4LRSearch = configAALR(L"numMiniBatch4LRSearch", ConfigRecordType::Array(intargvector(vector<int>{500})));
+        m_numSamples4Search.resize(numMiniBatch4LRSearch.size());
+        for (size_t i = 0; i < numMiniBatch4LRSearch.size(); ++i)
+            m_numSamples4Search[i] = numMiniBatch4LRSearch[i] * m_mbSize[i];
+    }
+    else
+    {
+        // Default is default mbSize * 500, same as above.
+        intargvector defaultValues;
+        defaultValues.resize(m_mbSize.size());
+        std::transform(m_mbSize.begin(), m_mbSize.end(), defaultValues.begin(), [](int v) { return v * 500; });
+        m_numSamples4Search = configAALR(L"numSamples4Search", ConfigRecordType::Array(defaultValues));
+    }
 
     // the number of samples in each epoch (0 means, use all the samples in each epoch).
     m_epochSize = configSGD(L"epochSize", (size_t) 0);
