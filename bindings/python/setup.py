@@ -7,15 +7,17 @@ from warnings import warn
 from setuptools import setup, Extension, find_packages
 import numpy
 
-if sys.version_info.major < 3:
-    print("Detected Python v2, which is not yet supported")
+IS_WINDOWS = platform.system() == 'Windows'
+
+if IS_WINDOWS and sys.version_info.major < 3:
+    print("Detected Python v2 on Windows, which is not yet supported")
     sys.exit(1)
 
-if shutil.which("swig") is None:
+
+# TODO FIXME
+if os.system('swig -version 1>/dev/null 2>/dev/null') != 0:
     print("Please install swig (>= 3.0.10) and include it in your path.\n")
     sys.exit(1)
-
-IS_WINDOWS = platform.system() == 'Windows'
 
 if IS_WINDOWS:
     if shutil.which("cl") is None:
