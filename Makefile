@@ -35,7 +35,12 @@
 #     defaults to /usr/local/
 #   BOOST_PATH= path to Boost installation, so $(BOOST_PATH)/include/boost/test/unit_test.hpp
 #     defaults to /usr/local/boost-1.60.0
-#   PYTHON_SUPPORT=true iff CNTK v2 Python modulke should be build
+#   PYTHON_SUPPORT=true iff CNTK v2 Python module should be build
+#   SWIG_PATH= path to SWIG (>= 3.0.10)
+#   PYTHON_VERSIONS= list of Python versions to build for
+#     A Python version is identified by "34" or "35".
+#   PYTHON34_PATH= path to Python 3.4 interpreter
+#   PYTHON35_PATH= path to Python 3.5 interpreter
 # These can be overridden on the command line, e.g. make BUILDTYPE=debug
 
 # TODO: Build static libraries for common dependencies that are shared by multiple 
@@ -993,18 +998,26 @@ EXTRA_LIBS_BASENAMES:=$(addsuffix .so,$(addprefix lib,$(filter-out $(RUNTIME_LIB
 python: $(ALL_LIBS)
 	@bash -c '\
             set -x; \
+            declare -A py_paths; \
+            py_paths[34]=$(PYTHON34_PATH); \
+            py_paths[35]=$(PYTHON35_PATH); \
             export LD_LIBRARY_PATH=$$(echo $(LIBPATH) $(KALDI_LIBPATH) | tr " " :); \
             ! (ldd $(LIBDIR)/* | grep  "not found") && \
             export CNTK_EXTRA_LIBRARIES=$$(ldd $(LIBDIR)/* | grep "^\s.*=> " | cut -d ">" -f 2- --only-delimited | cut -d "(" -f 1 --only-delimited | sort -u | grep -Ff <(echo $(EXTRA_LIBS_BASENAMES) | xargs -n1)) && \
-            which python swig 1> /dev/null && \
+            test -x $(SWIG_PATH) && \
             export CNTK_LIB_PATH=$$(readlink -f $(LIBDIR)) && \
             PYTHONDIR=$$(readlink -f $(PYTHONDIR)) && \
             test $$? -eq 0 && \
             cd bindings/python && \
-            python setup.py \
-                build \
-                bdist_wheel \
-                    --dist-dir $$PYTHONDIR'
+            export PATH=$(SWIG_PATH):$$PATH; \
+            for ver in $(PYTHON_VERSIONS); \
+            do \
+                test -x $${py_paths[$$ver]}; \
+                $${py_paths[$$ver]} setup.py \
+                    build \
+                    bdist_wheel \
+                        --dist-dir $$PYTHONDIR || exit $$?; \
+            done'
 
 ALL += python
 
