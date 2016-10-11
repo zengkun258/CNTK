@@ -1002,7 +1002,7 @@ python: $(ALL_LIBS)
             test $$? -eq 0 && \
             cd bindings/python && \
             python setup.py \
-                build_ext \
+                build \
                 bdist_wheel \
                     --dist-dir $$PYTHONDIR'
 
