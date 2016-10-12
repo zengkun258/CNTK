@@ -36,6 +36,19 @@ void StatisticsResultsExport(std::vector<std::pair<double, std::string>> outputs
     fprintf(stderr, "\n");
 }
 
+void PickValidAverageRatio(std::vector<std::pair<double, std::string>>& outputs, std::vector<std::unordered_map<int, std::pair<int, double>>> inputs)
+{
+    for (int i = 0; i < outputs.size(); i++)
+    {
+        double minimum = INT_MAX;
+        for (auto &histo : inputs[i])
+        {
+            if (minimum > histo.second.second) minimum = histo.second.second;
+        }
+        outputs[i].first = minimum;
+    }
+}
+
 // =======================================================================
 // class SGD
 // =======================================================================
@@ -1374,25 +1387,13 @@ size_t SGD<ElemType>::TrainOneEpoch(ComputationNetworkPtr net,
                 for (int i = 0; i < overallOutput.size(); i++)
                 {
                     overallOutput[i].second = overallTimesInMBs[i].second;
-                    int maxCount = 0;
-                    for (auto &histo : overallHistoStatistics[i])
-                    {
-                        if (maxCount >= histo.second.first) continue;
-                        maxCount = histo.second.first;
-                        overallOutput[i].first = histo.second.second;
-                    }
                 }
                 for (int i = 0; i < syncOutput.size(); i++)
                 {
                     syncOutput[i].second = syncTimesInMBs[i].second;
-                    int maxCount = 0;
-                    for (auto &histo : syncHistoStatistics[i])
-                    {
-                        if (maxCount >= histo.second.first) continue;
-                        maxCount = histo.second.first;
-                        syncOutput[i].first = histo.second.second;
-                    }
                 }
+                PickValidAverageRatio(overallOutput, overallHistoStatistics);
+                PickValidAverageRatio(syncOutput, syncHistoStatistics);
                 StatisticsResultsExport(overallOutput, "Overall");
                 StatisticsResultsExport(syncOutput, "Sync   ");
             }
