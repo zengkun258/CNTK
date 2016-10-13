@@ -14,6 +14,7 @@
 #endif
 
 #include "Basics.h"
+#include "basetypes.h"
 #include <string>
 #include <stdint.h>
 #include <memory>
@@ -41,6 +42,8 @@ typedef unsigned char byte;
 #define CPUSPARSE_INDEX_TYPE int // to be consistent with cuSparse but limited the possible size of the matrix.
 
 #define MEM_MAX_LIMIT_TIMES 2 // The maximum times allowed a cached memory block allocated to a request
+
+#pragma optimize("", off)
 
 namespace Microsoft { namespace MSR { namespace CNTK {
 
@@ -238,22 +241,27 @@ private:
 public:
     static BufferManagement& GetManagerInstance(DEVICEID_TYPE deviceId)
     {
+        CCritSec secLock;
         auto instance = m_instances.find(deviceId);
-        // BUGBUG: don't consider thread safe here, should we?
         if (instance == m_instances.end()) 
         {
-            instance = m_instances.insert(std::make_pair(deviceId, std::unique_ptr<BufferManagement>(
-                new BufferManagement()))).first;
-            instance->second->m_deviceId = deviceId;
-            instance->second->m_totalManageSize = 0;
-            instance->second->m_totalAllocSize = 0;
+            CAutoLock lock(secLock);
+            if (instance == m_instances.end())
+            {
+                instance = m_instances.insert(std::make_pair(deviceId, std::unique_ptr<BufferManagement>(
+                    new BufferManagement()))).first;
+                instance->second->m_deviceId = deviceId;
+                instance->second->m_totalManageSize = 0;
+                instance->second->m_totalAllocSize = 0;
+            }
         }
         return *(instance->second);
     }
 
     // for requesting, find in buffer container first, if failed, allocate a new one
+    // if allocating from buffer, the size will be modified to the real buffer size
     template<class ElemType>
-    ElemType* RequestBuffer(size_t size)
+    ElemType* RequestBuffer(size_t& size)
     {
         ElemType* bufferPtr = nullptr;
         auto& bufferContainer = BufferContainer<ElemType>();
@@ -263,27 +271,36 @@ public:
         if (bufferHint != bufferContainer.end() && bufferHint->first < size * MEM_MAX_LIMIT_TIMES) 
         {
             bufferPtr = bufferHint->second;
-            m_totalManageSize -= bufferHint->first;
+            size = bufferHint->first;
+            m_totalManageSize -= size;
             bufferContainer.erase(bufferHint);
             return bufferPtr;
         }
-
-        m_totalAllocSize += size;
 
         if (m_deviceId >= 0) {
 #ifndef CPUONLY
             auto deviceSize = TracingGPUMemoryAllocator::GetFreeAndTotalMemoryInMBs(m_deviceId);
             float utilizeRatio = (float)deviceSize.first / deviceSize.second;
-            if (utilizeRatio < 0.05f) 
+            if (utilizeRatio < 0.05f || (deviceSize.first << 20) / sizeof(ElemType) < size) 
             {
                 PhysicalReleaseAllBuffer<ElemType>();
             }
             bufferPtr = TracingGPUMemoryAllocator::Allocate<ElemType>(m_deviceId, size);
+            m_totalAllocSize += size;
 #endif
         }
         else 
         {
-            bufferPtr = new ElemType[size];
+            // first, try no-throw allocation.
+            // if failed, empty the buffer and re-try a throwing allocation
+            // if failed again, let system throw the bad_alloc exception
+            bufferPtr = new (std::nothrow) ElemType[size];
+            if (!bufferPtr) 
+            {
+                PhysicalReleaseAllBuffer<ElemType>();
+                bufferPtr = new ElemType[size];
+            }
+            m_totalAllocSize += size;
         }
 
         return bufferPtr;
@@ -325,6 +342,7 @@ public:
         }
 
         bufferContainer.clear();
+        m_totalManageSize = 0;
     }
 
 private:

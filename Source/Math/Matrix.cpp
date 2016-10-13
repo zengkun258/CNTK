@@ -147,6 +147,23 @@ namespace Microsoft { namespace MSR { namespace CNTK {
 
 MatrixBase::~MatrixBase() { }
 
+#pragma region BufferManagement
+
+std::unordered_map<DEVICEID_TYPE, std::unique_ptr<BufferManagement>> BufferManagement::m_instances;
+
+template <>
+std::multimap<size_t, float*>& BufferManagement::BufferContainer<float>() { return m_bufferFloatContainer; }
+template <>
+std::multimap<size_t, double*>& BufferManagement::BufferContainer<double>() { return m_bufferDoubleContainer; }
+template <>
+std::multimap<size_t, char*>& BufferManagement::BufferContainer<char>() { return m_bufferCharContainer; }
+template <>
+std::multimap<size_t, short*>& BufferManagement::BufferContainer<short>() { return m_bufferShortContainer; }
+template <>
+std::multimap<size_t, int*>& BufferManagement::BufferContainer<int>() { return m_bufferIntContainer; }
+
+#pragma endregion
+
 #pragma region Constructors, destructors and other static matrix builders
 
 
@@ -286,7 +303,7 @@ void Matrix<ElemType>::SetDataLocation(CurrentDataLocation location, MatrixType 
 }
 
 template <class ElemType>
-void Matrix<ElemType>::EnableUseCachedResize() { m_useCachedResize = true; }
+void Matrix<ElemType>::UseCachedResizeOrNot(bool useCachedResize) { m_useCachedResize = useCachedResize; }
 
 //this is a private constructor only used internally to initialize a blank matrix
 template <class ElemType>

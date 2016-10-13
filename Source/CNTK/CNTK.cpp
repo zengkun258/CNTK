@@ -215,7 +215,7 @@ void DoCommands(const ConfigParameters& config, const shared_ptr<MPIWrapper>& mp
         }
 
         if (Globals::ShouldEnableHyperCompressMemory())
-            Matrix<ElemType>::EnableUseCachedResize();
+            Matrix<ElemType>::UseCachedResizeOrNot(true);
 
         // determine the action to perform, and do it
         for (int j = 0; j < action.size(); j++)
