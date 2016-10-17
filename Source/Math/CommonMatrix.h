@@ -241,11 +241,11 @@ private:
 public:
     static BufferManagement& GetManagerInstance(DEVICEID_TYPE deviceId)
     {
-        CCritSec secLock;
+        static std::mutex instancLock;
         auto instance = m_instances.find(deviceId);
         if (instance == m_instances.end()) 
         {
-            CAutoLock lock(secLock);
+            std::lock_guard<std::mutex> lock(instancLock);
             if (instance == m_instances.end())
             {
                 instance = m_instances.insert(std::make_pair(deviceId, std::unique_ptr<BufferManagement>(
