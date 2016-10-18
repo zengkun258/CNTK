@@ -11,10 +11,8 @@ MAX_UI64 = int('0xffffffffffffffff', 16)
 
 class MinibatchData(cntk_py.MinibatchData):
     '''
-    Holds the minibatch data of an input. 
-
-    This is never directly created, but only returned by
-    :class:`MinibatchSource` instances.
+    Holds a minibatch of input data. This is never directly created, but 
+    only returned by :class:`MinibatchSource` instances.
     '''
 
     @property
@@ -73,7 +71,7 @@ class MinibatchSource(cntk_py.MinibatchSource):
     def stream_info(self, name):
         '''
         Gets the description of the stream with given name. 
-        Throws an exception of there are none or multiple streams with this
+        Throws an exception if there are none or multiple streams with this
         same name.
         '''
         return super(MinibatchSource, self).stream_info(name)
@@ -93,7 +91,7 @@ class MinibatchSource(cntk_py.MinibatchSource):
             device=None):
         '''
         Reads a minibatch that contains data for all input streams.  The
-        minibatch size is specified terms of #samples and/or #sequences for the
+        minibatch size is specified in terms of #samples and/or #sequences for the
         primary input stream; value of 0 for #samples/#sequences means
         unspecified.  In case the size is specified in terms of both #sequences
         and #samples, the smaller of the 2 is taken.  An empty map is returned
@@ -234,10 +232,23 @@ class ReaderConfig(dict):
 
 class Deserializer(dict):
     '''
-    Base deserializer class that can be used in the :class:`ReaderConfig`.
+    Base deserializer class that can be used in the :class:`ReaderConfig`. A 
+    deserializer is responsible for deserialization of input from external 
+    storage into in-memory sequences. 
+
+    Currently CNTK supports the below deserializers: 
+
+    ========================== ============
+    Deserializer type          Description
+    ========================== ============
+    :class:`ImageDeserializer` Deserializer for images that uses OpenCV
+    ========================== ============
 
     Args:
         type (`str`): type of the deserializer
+
+    See also: 
+        https://github.com/microsoft/cntk/wiki/Understanding-and-Extending-Readers
     '''
 
     def __init__(self, type):
@@ -256,7 +267,7 @@ class ImageDeserializer(Deserializer):
          classes
 
     See also:
-        https://github.com/microsoft/cntk/wiki/Understanding-and-Extending-Readers
+        https://github.com/microsoft/cntk/wiki/Image-reader
     '''
 
     def __init__(self, filename):
@@ -267,7 +278,8 @@ class ImageDeserializer(Deserializer):
     def map_features(self, node, transforms):
         '''
         Maps feature node (either node instance or node name) to the transforms
-        that will be applied to the images.
+        that will be applied to the images. It is usually applied to the input 
+        of the network with data augmentation. 
 
         Args:
             node (`str` or input node): node or its name
@@ -284,7 +296,8 @@ class ImageDeserializer(Deserializer):
     def map_labels(self, node, num_classes):
         '''
         Maps label node (either node instance or node name) 
-        that will be applied to the images.
+        that will be applied to the images. It is usually used to define the
+        ground truth of train or test. 
 
         Args:
             node (`str` or input node): node or its name
@@ -301,10 +314,22 @@ class ImageDeserializer(Deserializer):
         Crop transform that can be used to pass to `map_features`
 
         Args:
-            crop_type (`str`, default 'center'): 'center' or 'random'
-            ratio (`float`, default 1.0): crop ratio
-            jitter_type (`str`, default 'uniRatio'): possible values are
-             'None', 'UniRatio', 'UniLength', and 'UniArea'
+            crop_type (`str`, default 'center'): 'center' or 'random'.  'random' 
+             is usually used during training while 'center' is usually for testing. 
+             Random cropping is a popular data augmentation technique used to improve 
+             generalization of the DNN. 
+            ratio (`float`, default 1.0): crop ratio. It specifies the ratio of 
+             final image dimension, e.g.  width , to the size of the random crop 
+             taken from the image. For example, the ratio 224 / 256 = 0.875 means 
+             crop of size 224 will be taken from the image rescaled to 256 (implementation 
+             detail:  ImageReader  takes the crop and then rescales instead of doing 
+             the other way around). To enable scale jitter (another popular data 
+             augmentation technique), use colon-delimited values like  cropRatio=0.875:0.466  
+             which means 224 crop will be taken from images randomly scaled to have 
+             size in [256, 480] range.
+            jitter_type (`str`, default 'uniRatio'): crop scale jitter type, possible 
+             values are 'None', 'UniRatio'. 'uniRatio' means uniform distributed jitter
+             scale between the minimum and maximum cropRatio values. 
 
         Returns:
             `dict` describing the crop transform
@@ -315,7 +340,7 @@ class ImageDeserializer(Deserializer):
     @staticmethod
     def scale(width, height, channels, interpolations='linear'):
         '''
-        Scale transform that can be used to pass to `map_features`
+        Scale transform that can be used to pass to `map_features` for data augmentation. 
 
         Args:
             width (`int`): width of the image in pixels
@@ -333,7 +358,7 @@ class ImageDeserializer(Deserializer):
     @staticmethod
     def mean(filename):
         '''
-        Mean transform that can be used to pass to `map_features`
+        Mean transform that can be used to pass to `map_features` for data augmentation. 
 
         Args:
             filename (`str`): file that stores the mean values for each pixel
@@ -376,14 +401,14 @@ def text_format_minibatch_source(path, stream_configs, epoch_size=MAX_UI64, rand
 
 class StreamConfiguration(cntk_py.StreamConfiguration):
     '''
-    Configuration of a stream in a text format reader. This can be used
+    Configuration of a stream in a text format reader. This can be used in
     :func:`text_format_minibatch_source`.
 
     Args:
         name (`str`): name of this stream
         dim (`int`): dimensions of this stream. A text format reader reads data
-        as flat arrays. If you need different shapes you can
-        :func:`cntk.ops.reshape` it later.
+         as flat arrays. If you need different shapes you can
+         :func:`cntk.ops.reshape` it later.
         is_sparse (`bool`, default `False`): whether the provided data is sparse
          (`False` by default)
         stream_alias (`str`, default ''): name of the stream in the file that is fed to the
