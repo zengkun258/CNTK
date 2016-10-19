@@ -480,7 +480,7 @@ CNTK2 = [
     CrossEntropyWithSampledSoftmax(
         hiddenLayer,                   // [numHidden] Hidden vector feedng into the linear layer before softmax.
         labels,                        // [numClasses] One-hot for the true class (labels).
-        randomSampleSelector,          // [numClasses x numSamples] Sparse matrix. Each column is a 1-hot vector representing one sample.
+        randomSampleSelector,          // [numClasses x numSamples] Sparse matrix. Each column is a 1-hot vector representing one sample. From GetRandomSample node.
         weights,                       // [numClasses x numHidden] Weight matrix for the linear layer that feeds into the softmax
         bias,                          // [numClasses] Biases for the linear layer that feeds into the softmax.
         logExpectedInSampleFrequeny,   // For each class logarithm of the estimated frequency the class is expected to occur in the set of random samples
