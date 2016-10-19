@@ -14,9 +14,9 @@ void RandomSampleNodeBase<ElemType>::CopyTo(ComputationNodeBasePtr nodeP, const 
     if (flags & CopyNodeFlags::copyNodeValue)
     {
         auto node = dynamic_pointer_cast<RandomSampleNodeBase<ElemType>>(nodeP);
-        node->m_allowDuplicates           = m_allowDuplicates;
-        node->m_sizeOfSampledSet          = m_sizeOfSampledSet;
-        node->m_randomSeed                = m_randomSeed;
+        node->m_allowDuplicates  = m_allowDuplicates;
+        node->m_sizeOfSampledSet = m_sizeOfSampledSet;
+        node->m_randomSeed       = m_randomSeed;
     }
 }
 
@@ -104,7 +104,8 @@ void RandomSampleNode<ElemType>::ForwardPropNonLooping()
     valueMatrix.TransferToDeviceIfNotThere(CPUDEVICE, /*ismoved =*/ true/*means: BOTH state not ok */, /*emptyTransfer =*/ true, /*updatePreferredDevice =*/ false);
     valueMatrix.SetDevice(CPUDEVICE);
 
-    //BUGBUG: matrix type should be configured during validation
+    // BUGBUG: matrix type should be configured during validation
+    // TODO: Should we prepare the CSC data directly on the CPU and move it in one go?
     valueMatrix.SwitchToMatrixType(SPARSE, matrixFormatSparseCSC, false);
     valueMatrix.Reset();
 
@@ -135,17 +136,16 @@ void RandomSampleNode<ElemType>::Validate(bool isFinalValidationPass)
 
     let& shape = Input(0)->GetSampleLayout();
     let dims = shape.GetDims();
-    size_t nClasses = dims[0];
+    size_t numClasses = dims[0];
 
     // Output: a (sparse) matrix containing m_sizeOfSampledSet columns of 1-hot vectors specifiying the sampled classes.
-    SetDims(TensorShape(nClasses, Base::m_sizeOfSampledSet), false);
+    SetDims(TensorShape(numClasses, Base::m_sizeOfSampledSet), false);
 }
 
 template<class ElemType>
 bool RandomSampleNode<ElemType>::IsOutOfDateWrtInputs() const
 {
-    // If we are in the mode to generate random samples (i.e. m_estimateInSampleFrequency == false) 
-    // we need to recompute the result for each mini-batch even if the weight vector didn't change.
+    // We need to recompute the result for each mini-batch even if the weight vector didn't change.
     return true;
 }
 
@@ -191,7 +191,7 @@ void RandomSampleInclusionFrequencyNode<ElemType>::ForwardPropNonLooping()
     valueMatrix.TransferToDeviceIfNotThere(CPUDEVICE, /*ismoved =*/ true/*means: BOTH state not ok */, /*emptyTransfer =*/ true, /*updatePreferredDevice =*/ false);
     valueMatrix.SetDevice(CPUDEVICE);
 
-    //BUGBUG: matrix type should be configured during validation
+    // BUGBUG: matrix type should be configured during validation
     valueMatrix.SwitchToMatrixType(DENSE, matrixFormatDense, false);
     double sumOfWeights = Base::m_samplingWeightsPrefixSum.back();
     const Matrix<ElemType>& samplingWeights = Input(0)->ValueAsMatrix();

@@ -1244,6 +1244,8 @@ protected:
 // The output has no dynamic axis.
 // The samples are drawn with a probability proportional to the weights w of the vector 'samplingWeights' : p(w_i) = w_i / sum_k(w_k)
 // We get one set of samples for per minibatch.
+// Multiply a 'numClasses' - dimensional vector with this matrix to randomly sample 'sizeOfSampledSet' values from it.
+// The resulting vector has a dimension of 'sizeOfSampledSet'.Currently, only rank - 1 tensors are supported.
 // Intended uses are e.g. sampled softmax, noise contrastive estimation etc.
 //
 // Parameters:
@@ -1276,7 +1278,7 @@ public:
 
 // ------------------------------------------------------------------------------------------------------------------------------------------------
 // RandomSampleInclusionFrequencyNode(samplingWeights, sizeOfSampledSet, allowDuplicates): 
-// Intended uses are e.g. sampled softmax, noise contrastive estimation etc where it is used together with RandomSampleNode.
+// Intended uses are e.g. sampled softmax, noise contrastive estimation etc. where it is used together with RandomSampleNode.
 // This node estimates how often each class will occur in a set sampled with RandomSampleNode(...) on the average. 
 // If the sampling mode 'allowDuplicates = true' is choosen this is trivial and exact. 
 // For allowDuplicates = false we get some estimate. The value is updated only when the input weights change.
