@@ -85,7 +85,8 @@ def cross_entropy_with_softmax(output_vector, target_vector, axis=-1, name=''):
     Args:
         output_vector: the unscaled computed output values from the network
         target_vector: usually it is one-hot vector where the hot bit corresponds to the label index.
-        But it can be any probability distribution over the labels.
+         But it can be any probability distribution over the labels.
+        axis (`int` or :class:`cntk.Axis`): the axis in which reduction is performed
         name (`str`, optional): the name of the Function instance in the network
     Returns:
         :class:`cntk.ops.functions.Function`

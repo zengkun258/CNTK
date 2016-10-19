@@ -17,16 +17,12 @@ from .ops_test_utils import _test_binary_op, AA, precision, PRECISION_TO_TYPE,\
 
 TARGET_OUT_PAIRS = [
     ([[0., 0., 0., 1]], [[1., 2., 3., 4.]]),
-    #([[0., 0., 0.5, 0.5]], [[1., 2., 3., 4.]]),
-    #([[0., 0.4, 0.3, 0.3]], [[2., 1., 1., 4.]])
+    ([[0., 0., 0.5, 0.5]], [[1., 2., 3., 4.]]),
+    ([[0., 0.4, 0.3, 0.3]], [[2., 1., 1., 4.]])
 ]
 
-# TODO: Enable tests when 0d arrays are correctly handled for backward
-# propagation e. g. array(29.0)
-
-
 @pytest.mark.parametrize("target_vector, output_vector", TARGET_OUT_PAIRS)
-def _test_op_cross_entropy_with_soft_max(output_vector, target_vector, device_id, precision):
+def test_op_cross_entropy_with_soft_max(output_vector, target_vector, device_id, precision):
     dt = PRECISION_TO_TYPE[precision]
     o = AA(output_vector, dtype=dt)
     o_max = o - o.max()
@@ -42,11 +38,11 @@ def _test_op_cross_entropy_with_soft_max(output_vector, target_vector, device_id
 
     s = np.sum(t, dtype=dt)
     backward = np.subtract(s_max * s, t)
-    backward.shape = (1,1)+backward.shape
+    backward.shape = (1,1) + backward.shape
 
     expected_backward = {
         'left_arg':  backward,
-        'right_arg': backward
+        'right_arg': [[-1*o]]
     }
 
     from .. import cross_entropy_with_softmax
@@ -54,32 +50,30 @@ def _test_op_cross_entropy_with_soft_max(output_vector, target_vector, device_id
                     output_vector, target_vector,
                     expected_forward, expected_backward)
 
-
 @pytest.mark.parametrize("target_vector, output_vector", TARGET_OUT_PAIRS)
-def _test_op_squared_error(output_vector, target_vector, device_id, precision):
+def test_op_squared_error(output_vector, target_vector, device_id, precision):
     dt = PRECISION_TO_TYPE[precision]
 
     o = AA(output_vector, dtype=dt)
     t = AA(target_vector, dtype=dt)
 
-    expected_forward = np.sum((t - o)**2)
+    expected_forward = AA([[np.sum((t - o)**2)]])
 
+    backward = 2 * np.subtract(o, t)
     expected_backward = {
-        'left_arg':  2 * np.subtract(t, o),
-        'right_arg': 2 * np.subtract(o, t)
+        'left_arg':  [[backward]],
+        'right_arg': [[-1*backward]]
     }
 
     from .. import squared_error
     _test_binary_op(precision, device_id, squared_error,
                     output_vector, target_vector,
-                    expected_forward, expected_backward, True)
+                    expected_forward, expected_backward)
 
 TARGET_OUT_PAIRS_EP = [
     ([[1., 0., 0., 0]], [[1., 2., 3., 4.]]),
     ([[0., 0., 0., 1]], [[1., 2., 3., 4.]]),
 ]
-
-# -- ErrorPrediction with softmax operation tests --
 
 @pytest.mark.parametrize("target_vector, output_vector", TARGET_OUT_PAIRS_EP)
 def test_op_classification_error(output_vector, target_vector, device_id, precision):
@@ -88,10 +82,22 @@ def test_op_classification_error(output_vector, target_vector, device_id, precis
     o = AA(output_vector, dtype=dt)
     t = AA(target_vector, dtype=dt)
 
-    expected_forward = [[int(np.argmax(t) != np.argmax(o))]]
+    different_position = np.argmax(t) != np.argmax(o)
+
+    expected_forward = [[AA([[int(different_position)]], dtype=dt)]]
+
+    zero_backward = np.zeros_like([[t]], dtype=dt)
+    left_backward = np.copy(zero_backward)
     
+    zero_backward[..., np.argmax(o)] = -1.
+    right_backward = zero_backward
+
+    expected_backward = {
+        'left_arg':  left_backward,
+        'right_arg': right_backward
+    }
+
     from .. import classification_error
-    op = classification_error(o, t)
-    
-    unittest_helper(op, {}, {}, {},
-            device_id=device_id, precision=precision)
+    _test_binary_op(precision, device_id, classification_error,
+                    output_vector, target_vector,
+                    expected_forward, expected_backward)
