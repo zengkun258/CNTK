@@ -43,7 +43,7 @@ public:
     using Mat = Matrix<ElemType>;
 
 public:
-    virtual ~ConvolutionEngine() = default;
+	virtual ~ConvolutionEngine() {};
 
     void Forward(const Mat& in, const Mat& kernel, Mat& out, Mat& workspace);
 

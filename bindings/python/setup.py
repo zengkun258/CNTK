@@ -19,21 +19,21 @@ if os.system('swig -version 1>%s 2>%s' % (os.devnull, os.devnull)) != 0:
     print("Please install swig (>= 3.0.10) and include it in your path.\n")
     sys.exit(1)
 
-if IS_WINDOWS:
-    if shutil.which("cl") is None:
-        print("Compiler was not found in path. Please run this from a Visual Studio 2013 x64 Native Tools Command Prompt,\n"
-              "e.g., by running the following command:\n"
-              "  \"C:\\Program Files (x86)\\Microsoft Visual Studio 12.0\\VC\\vcvarsall\" amd64\n")
-        sys.exit(1)
+#if IS_WINDOWS:
+    #if shutil.which("cl") is None:
+    #    print("Compiler was not found in path. Please run this from a Visual Studio 2013 x64 Native Tools Command Prompt,\n"
+    #          "e.g., by running the following command:\n"
+    #          "  \"C:\\Program Files (x86)\\Microsoft Visual Studio 12.0\\VC\\vcvarsall\" amd64\n")
+    #    sys.exit(1)
 
-    try:
-        assert(os.environ["MSSdk"] == "1");
-        assert(os.environ["DISTUTILS_USE_SDK"] == "1");
-    except (KeyError, AssertionError) as e:
-        print("Please set the environment variables MSSdk and DISTUTILS_USE_SDK to 1:\n"
-              "  set MSSdk=1\n"
-              "  set DISTUTILS_USE_SDK=1\n")
-        sys.exit(1)
+   # try:
+   #     assert(os.environ["MSSdk"] == "1");
+   #     assert(os.environ["DISTUTILS_USE_SDK"] == "1");
+   # except (KeyError, AssertionError) as e:
+   #     print("Please set the environment variables MSSdk and DISTUTILS_USE_SDK to 1:\n"
+   #           "  set MSSdk=1\n"
+   #          "  set DISTUTILS_USE_SDK=1\n")
+   #     sys.exit(1)
 
 CNTK_PATH = os.path.join(os.path.dirname(__file__), "..", "..")
 CNTK_SOURCE_PATH = os.path.join(CNTK_PATH, "Source")
@@ -115,6 +115,7 @@ if IS_WINDOWS:
         "/DEBUG",
         "/Zi",
         "/EHsc",
+        "/MD"
     ]
     runtime_library_dirs = []
 else:

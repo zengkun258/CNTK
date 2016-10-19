@@ -26,14 +26,13 @@ REM (Note: to disable Python build completely, no CNTK_PYx_PATH variable must be
 if not defined p_CNTK_PY_VERSIONS (
   REM Note: leading space doesn't hurt
   if defined p_CNTK_PY27_PATH set p_CNTK_PY_VERSIONS=!p_CNTK_PY_VERSIONS! 27
-  if defined p_CNTK_PY34_PATH set p_CNTK_PY_VERSIONS=!p_CNTK_PY_VERSIONS! 34
   if defined p_CNTK_PY35_PATH set p_CNTK_PY_VERSIONS=!p_CNTK_PY_VERSIONS! 35
 )
 
 REM Validate p_CNTK_PY_VERSIONS contents.
 REM TODO Python 3.4 only for now
 for %%p in (%p_CNTK_PY_VERSIONS%) do (
-  if not "%%~p" == "34" echo Build for unsupported Python version '%%~p' requested, stopping&exit /b 1
+  if not "%%~p" == "34" if not "%%~p" == "35" echo Build for unsupported Python version '%%~p' requested, stopping&exit /b 1
   set nothingToBuild=
 )
 
@@ -49,12 +48,13 @@ if defined nothingToBuild echo Python support not configured to build.&exit /b 0
 
 if "%p_DebugBuild%" == "true" echo Currently no Python build for Debug configurations, exiting.&exit /b 0
 
-call "C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\vcvarsall" amd64
+rem call "C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\vcvarsall" amd64
 set CNTK_LIB_PATH=%p_OutDir%
 set DIST_DIR=%p_OutDir%\Python
 set PATH=%p_SWIG_PATH%;%PATH%
 set MSSdk=1
 set DISTUTILS_USE_SDK=1
+set PY_VCRUNTIME_REDIST=C:\Path\To\My\vcruntime140.dll
 
 REM Build everything in supplied order
 set oldPath=%PATH%
