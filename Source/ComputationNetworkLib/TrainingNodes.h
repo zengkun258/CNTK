@@ -1221,7 +1221,7 @@ protected:
 
     // Runs the sampling returning a vector with the id's of the samples. The parameter nTries is used to return the number of draws that was needed
     // to get the expected number of samples.
-    const std::vector<size_t> RunSampling(long& nTries);
+    const std::vector<size_t> RunSampling(size_t& nTries);
 
 public:
     virtual void /*ComputationNode::*/ BackpropToNonLooping(size_t inputIndex) override {

@@ -53,7 +53,7 @@ void RandomSampleNodeBase<ElemType>::UpdateWeightsPrefixSum()
 // Runs the sampling returning a vector with the id's of the samples. The parameter nTries is used to return the number of draws that was needed
 // to get the expected number of samples.
 template<class ElemType>
-const std::vector<size_t> RandomSampleNodeBase<ElemType>::RunSampling(long& nTries)
+const std::vector<size_t> RandomSampleNodeBase<ElemType>::RunSampling(size_t& nTries)
 {
     std::uniform_real_distribution<double> r(0, m_samplingWeightsPrefixSum.back());
     std::unordered_set<int> alreadySampled;
@@ -122,7 +122,7 @@ void RandomSampleNode<ElemType>::ForwardPropNonLooping()
 template<class ElemType>
 const std::vector<size_t> RandomSampleNode<ElemType>::GetWeightedSamples()
 {
-    long dummy;
+    size_t dummy;
     // Here we are not interested in the number of sampling tries needed, which is returned in the parameter.
     return Base::RunSampling(dummy);
 }
@@ -155,9 +155,9 @@ double RandomSampleInclusionFrequencyNode<ElemType>::EstimateNumberOfTries()
     // We estimate the average numver of tries by repeating a fixed number of experiments
     const size_t numExperiments = 10; // We choose 10 without any deep justification.
     long totalTries = 0;
-    for (int iExperiment = 0; iExperiment < numExperiments; iExperiment++)
+    for (int i = 0; i < numExperiments; i++)
     {
-        long nTries;
+        size_t nTries;
         Base::RunSampling(nTries);
         totalTries += nTries;
     }
