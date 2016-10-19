@@ -1224,28 +1224,25 @@ protected:
     const std::vector<size_t> RunSampling(size_t& nTries);
 
 public:
-    virtual void /*ComputationNode::*/ BackpropToNonLooping(size_t inputIndex) override {
-        // This node does not propagate gradients.
-    }
-
-    virtual void /*ComputationNodeBase::*/ Validate(bool isFinalValidationPass) override{}
+    virtual void /*ComputationNode::*/ BackpropToNonLooping(size_t inputIndex) override {} // This node does not propagate gradients.
+    virtual void /*ComputationNodeBase::*/ Validate(bool isFinalValidationPass) override {}
 
     virtual bool OutputUsedInComputingInputNodesGradients() const override { return false; }
-
     virtual bool InputUsedInComputingInputNodesGradients(size_t /*childIndex*/) const override { return false;}
     virtual void /*ComputationNode::*/ ForwardPropNonLooping() override{}
 
 protected:
     bool m_allowDuplicates; // The node can create samples allowing for duplicates (sampling with replacement) or not (sampling without replacement).
-    int m_sizeOfSampledSet; // Requested size of sample in case of run-mode = CREATE_SAMPLES.
+    size_t m_sizeOfSampledSet; // Requested size of sample in case of run-mode = CREATE_SAMPLES.
     std::vector<double> m_samplingWeightsPrefixSum;
 };
 
 // ------------------------------------------------------------------------------------------------------------------------------------------------
 // RandomSampleNode(samplingWeights, sizeOfSampledSet, allowDuplicates):
-// The node's value is a set of sizeOfSampledSet random samples represented as a (sparse) matrix of shape [nClasses x sizeOfSampledSet] where nClasses is the number of classes (categories) to choose from.
+// The node's value is a set of sizeOfSampledSet random samples represented as a (sparse) matrix 
+// of shape [nClasses x sizeOfSampledSet] where nClasses is the number of classes (categories) to choose from.
 // The output has no dynamic axis.
-// The samples are drawn according to the weight vector p(w_i) = w_i / sum_k(w_k)
+// The samples are drawn with a probability proportional to the weights w of the vector 'samplingWeights' : p(w_i) = w_i / sum_k(w_k)
 // We get one set of samples for per minibatch.
 // Intended uses are e.g. sampled softmax, noise contrastive estimation etc.
 //

@@ -149,6 +149,9 @@ bool RandomSampleNode<ElemType>::IsOutOfDateWrtInputs() const
     return true;
 }
 
+template class RandomSampleNode<float>;
+template class RandomSampleNode<double>;
+
 template<class ElemType>
 double RandomSampleInclusionFrequencyNode<ElemType>::EstimateNumberOfTries()
 {
@@ -218,8 +221,6 @@ void RandomSampleInclusionFrequencyNode<ElemType>::Validate(bool isFinalValidati
     SetDims(TensorShape(nClasses, 1), false);
 }
 
-template class RandomSampleNode<float>;
-template class RandomSampleNode<double>;
 template class RandomSampleInclusionFrequencyNode<float>;
 template class RandomSampleInclusionFrequencyNode<double>;
 }}}
