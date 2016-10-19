@@ -388,6 +388,7 @@ namespace CNTK
         friend class LearnerBase;
         friend class Variable;
         friend class PackedValue;
+        friend class MPICommunicatorImpl;
 
         template <typename T, typename ...CtorArgTypes>
         friend inline std::shared_ptr<T> MakeSharedObject(CtorArgTypes&& ...ctorArgs);
@@ -3439,10 +3440,18 @@ namespace CNTK
         // TODO: Add an async variant of the QuantizedAggregate method
         CNTK_API virtual void QuantizedAggregate(
             const std::vector<NDArrayViewPtr>& inValues,
-            const std::vector<NDArrayViewPtr>& inPreviousQuantizationResidues,
-            const std::unordered_set<DistributedWorkerDescriptor>& sendToWorkers,
-            const std::vector<NDArrayViewPtr>& aggregatedOutputs,
-            const std::vector<NDArrayViewPtr>& newQuantizationResidues) = 0;
+            const std::vector<NDArrayViewPtr>& valueQuantizationResidues,
+            const std::vector<NDArrayViewPtr>& stripeQuantizationResidues,
+            std::vector<NDArrayViewPtr>& aggregatedOutputs,
+            std::vector<NDArrayViewPtr>& newQuantizationResidues,
+            std::vector<NDArrayViewPtr>& newStripeQuantizationResidues,
+            const std::unordered_set<DistributedWorkerDescriptor>& sendToWorkers) = 0;
+
+        CNTK_API virtual void QuantizedAggregateInPlace(
+            std::vector<NDArrayViewPtr>& inValues,
+            std::vector<NDArrayViewPtr>& valueQuantizationResidues,
+            std::vector<NDArrayViewPtr>& stripeQuantizationResidues,
+            const std::unordered_set<DistributedWorkerDescriptor>& sendToWorkers) = 0;
 
     protected:
         DistributedCommunicator() {};
@@ -3452,6 +3461,11 @@ namespace CNTK
     /// Built-in MPI-based communicator.
     ///
     CNTK_API DistributedCommunicatorPtr MPICommunicator();
+
+    ///
+    /// Distributed communicator that allows quantized aggregations.
+    ///
+    CNTK_API DistributedCommunicatorPtr QuantizedMPICommunicator(bool zeroThresholdFor1Bit, bool useQuantizationForSelfStripe, size_t numQuantizationBits);
 
     /// A collection of additional information needed for the distributed trainer to aggregate the gradients
     struct MinibatchInfo
@@ -3483,10 +3497,11 @@ namespace CNTK
     };
 
     CNTK_API DistributedTrainerPtr CreateDataParallelDistributedTrainer(DistributedCommunicatorPtr communicator, bool useAsyncBufferedParameterUpdate);
+    CNTK_API DistributedTrainerPtr CreateQuantizedDataParallelDistributedTrainer(DistributedCommunicatorPtr communicator, bool useAsyncBufferedParameterUpdate);
 }
 
-namespace std {
-
+namespace std 
+{
     template <> struct hash<::CNTK::DistributedWorkerDescriptor>
     {
         size_t operator()(const ::CNTK::DistributedWorkerDescriptor& x) const

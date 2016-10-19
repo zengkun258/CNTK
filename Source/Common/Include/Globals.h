@@ -19,10 +19,7 @@ namespace Microsoft { namespace MSR { namespace CNTK {
         static void       ForceConstantRandomSeed() {        m_forceConstantRandomSeed = true; }
         static bool ShouldForceConstantRandomSeed() { return m_forceConstantRandomSeed; }
 
-        static bool UseV2Aggregator()
-        {
-            return false;
-        }
+        static bool UseV2Aggregator() { return true; }
 
     private:
         static std::atomic<bool> m_forceDeterministicAlgorithms;

@@ -17,7 +17,7 @@ namespace Microsoft { namespace MSR { namespace CNTK {
 
 namespace CNTK
 {
-    class MPICommunicatorImpl final : public DistributedCommunicator, public std::enable_shared_from_this<MPICommunicatorImpl>
+    class MPICommunicatorImpl : public DistributedCommunicator, public std::enable_shared_from_this<MPICommunicatorImpl>
     {
     public:
         MPICommunicatorImpl();
@@ -50,14 +50,24 @@ namespace CNTK
 
         // A collective communication API to perform quantized aggregation of values across all workers of this communicator
         // TODO: Add an async variant of the QuantizedAggregate method
-        virtual void QuantizedAggregate(const std::vector<NDArrayViewPtr>& inValues,
-            const std::vector<NDArrayViewPtr>& inPreviousQuantizationResidues,
-            const std::unordered_set<DistributedWorkerDescriptor>& sendToWorkers,
-            const std::vector<NDArrayViewPtr>& aggregatedOutputs,
-            const std::vector<NDArrayViewPtr>& newQuantizationResidues) override;
+        void QuantizedAggregate(
+            const std::vector<NDArrayViewPtr>& inValues,
+            const std::vector<NDArrayViewPtr>& valueQuantizationResidues,
+            const std::vector<NDArrayViewPtr>& stripeQuantizationResidues,
+            std::vector<NDArrayViewPtr>& aggregatedOutputs,
+            std::vector<NDArrayViewPtr>& newQuantizationResidues,
+            std::vector<NDArrayViewPtr>& newStripeQuantizationResidues,
+            const std::unordered_set<DistributedWorkerDescriptor>& sendToWorkers) override;
+
+        void QuantizedAggregateInPlace(
+            std::vector<NDArrayViewPtr>& inValues,
+            std::vector<NDArrayViewPtr>& valueQuantizationResidues,
+            std::vector<NDArrayViewPtr>& stripeQuantizationResidues,
+            const std::unordered_set<DistributedWorkerDescriptor>& sendToWorkers) override;
+
+        virtual ~MPICommunicatorImpl() {}
 
     private:
-        void CheckWorkers(const std::unordered_set<DistributedWorkerDescriptor>& sendToWorkers);
         void Initialize(const std::vector<NDArrayViewPtr>& values);
 
         void AggregateImpl(
@@ -72,13 +82,39 @@ namespace CNTK
         };
 
         static Buffer AllocateIntermediateBuffer(int deviceID, size_t totalSize);
+        std::vector<Buffer> m_intermediateCPUBuffers;
 
         DistributedWorkerDescriptor m_currentWorker;
         std::unordered_set<DistributedWorkerDescriptor> m_workers;
 
         // TODO: these two are always parallel, merge them together?
         std::vector<std::shared_ptr<Microsoft::MSR::CNTK::GPUDataTransferer>> m_gpuDataTransferers;
-        std::vector<Buffer> m_intermediateCPUBuffers;
+
+    protected:
+        DeviceDescriptor GetNonCPUDevice(const std::vector<NDArrayViewPtr>& values)
+        {
+            auto device = std::find_if(values.begin(), values.end(), [](const NDArrayViewPtr v) { return v->Device().Type() != DeviceKind::CPU; });
+            return values.end() == device ? DeviceDescriptor::CPUDevice() : (*device)->Device();
+        }
+
+        size_t GetBufferSize(const NDArrayViewPtr& viewPtr)
+        {
+            return viewPtr->Shape().TotalSize() * DataTypeSize(viewPtr->GetDataType());
+        }
+
+        template <typename ElementType>
+        std::shared_ptr<const Microsoft::MSR::CNTK::Matrix<ElementType>> GetMatrix(const NDArrayViewPtr& arrayView)
+        {
+            return arrayView->GetMatrix<ElementType>();
+        }
+
+        template <typename ElementType>
+        std::shared_ptr<Microsoft::MSR::CNTK::Matrix<ElementType>> GetWritableMatrix(const NDArrayViewPtr& arrayView)
+        {
+            return arrayView->GetWritableMatrix<ElementType>();
+        }
+
+        void CheckWorkers(const std::unordered_set<DistributedWorkerDescriptor>& sendToWorkers);
 
         Microsoft::MSR::CNTK::MPIWrapperPtr m_mpi;
     };

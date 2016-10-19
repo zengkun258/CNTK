@@ -17,6 +17,16 @@ using namespace Microsoft::MSR::CNTK;
 
 namespace CNTK
 {
+    void Recreate(const std::vector<NDArrayViewPtr>& values, std::vector<NDArrayViewPtr>& output)
+    {
+        output.resize(values.size());
+        for (size_t i = 0; i < values.size(); ++i)
+        {
+            const auto inputView = values[i];
+            output[i] = MakeSharedObject<NDArrayView>(inputView->GetDataType(), inputView->Shape(), inputView->Device());
+        }
+    }
+
     DistributedCommunicatorPtr MPICommunicator()
     {
         return std::make_shared<MPICommunicatorImpl>();
@@ -48,15 +58,9 @@ namespace CNTK
         return nullptr; // Make compiler happy.
     }
 
-    inline DeviceDescriptor GetNonCPUDevice(const std::vector<NDArrayViewPtr>& values)
-    {
-        auto device = std::find_if(values.begin(), values.end(), [](const NDArrayViewPtr v) { return v ->Device().Type() != DeviceKind::CPU; });
-        return values.end() == device ? DeviceDescriptor::CPUDevice() : (*device)->Device();
-    }
-
     MPICommunicatorImpl::MPICommunicatorImpl()
     {
-        m_mpi = MPIWrapper::s_initialized ? MPIWrapper::GetInstance() : std::make_shared<MPIWrapper>();;
+        m_mpi = MPIWrapper::s_initialized ? MPIWrapper::GetInstance() : MPIWrapper::GetInstance(true);
         m_currentWorker.m_globalRank = m_mpi->CurrentNodeRank();
         m_currentWorker.m_hostId = std::wstring(m_mpi->CurrentNodeName());
         for (size_t i = 0; i < m_mpi->NumNodesInUse(); ++i)
@@ -138,6 +142,8 @@ namespace CNTK
         {
             NOT_IMPLEMENTED;
         }
+
+        Recreate(values, outputValues);
 
         auto device = GetNonCPUDevice(values);
         if (device.Type() != DeviceKind::CPU)
@@ -319,11 +325,33 @@ namespace CNTK
         }
     }
 
-    void MPICommunicatorImpl::QuantizedAggregate(const std::vector<NDArrayViewPtr>& /*inValues*/,
-        const std::vector<NDArrayViewPtr>& /*inPreviousQuantizationResidues*/,
-        const std::unordered_set<DistributedWorkerDescriptor>& /*sendToWorkers*/,
-        const std::vector<NDArrayViewPtr>& /*aggregatedOutputs*/,
-        const std::vector<NDArrayViewPtr>& /*newQuantizationResidues*/)
+    void MPICommunicatorImpl::QuantizedAggregateInPlace(
+        std::vector<NDArrayViewPtr>& inValues,
+        std::vector<NDArrayViewPtr>& valueQuantizationResidues,
+        std::vector<NDArrayViewPtr>& stripeQuantizationResidues,
+        const std::unordered_set<DistributedWorkerDescriptor>& sendToWorkers)
+    {
+        if (m_mpi->NumNodesInUse() == 1) // No need to aggregate anything.
+            return;
+
+        QuantizedAggregate(
+            inValues,
+            valueQuantizationResidues,
+            stripeQuantizationResidues,
+            inValues,
+            valueQuantizationResidues,
+            stripeQuantizationResidues,
+            sendToWorkers);
+    }
+
+    void MPICommunicatorImpl::QuantizedAggregate(
+        const std::vector<NDArrayViewPtr>& /*inValues*/,
+        const std::vector<NDArrayViewPtr>& /*valueQuantizationResidues*/,
+        const std::vector<NDArrayViewPtr>& /*stripeQuantizationResidues*/,
+        std::vector<NDArrayViewPtr>& /*aggregatedOutputs*/,
+        std::vector<NDArrayViewPtr>& /*newQuantizationResidues*/,
+        std::vector<NDArrayViewPtr>& /*newStripeQuantizationResidues*/,
+        const std::unordered_set<DistributedWorkerDescriptor>& /*sendToWorkers*/)
     {
         NOT_IMPLEMENTED;
     }
