@@ -58,9 +58,9 @@ const std::vector<size_t> RandomSampleNodeBase<ElemType>::RunSampling(size_t& nT
     std::uniform_real_distribution<double> r(0, m_samplingWeightsPrefixSum.back());
     std::unordered_set<int> alreadySampled;
     std::vector<size_t> samples;
-    CPURNGHandle* cpuRNGHandle = dynamic_cast<CPURNGHandle*>(&GetRNGHandle(CPUDEVICE)); 
-    // find random samples using the specified weight
+    CPURNGHandle* cpuRNGHandle = dynamic_cast<CPURNGHandle*>(&GetRNGHandle(CPUDEVICE));
 
+    // find random samples using the specified weight
     if (m_allowDuplicates)
         nTries = m_sizeOfSampledSet;
     else
@@ -101,11 +101,12 @@ void RandomSampleNode<ElemType>::ForwardPropNonLooping()
 {
     Base::UpdateWeightsPrefixSum();
     Matrix<ElemType>& valueMatrix = ValueAsMatrix();
+    // TODO: Should we prepare the CSC data directly on the CPU and move it in one go?
+    // Currently the reader will place the data onto the GPU. It will then be pulled on-demand to the CPU once (and cached there).
     valueMatrix.TransferToDeviceIfNotThere(CPUDEVICE, /*ismoved =*/ true/*means: BOTH state not ok */, /*emptyTransfer =*/ true, /*updatePreferredDevice =*/ false);
     valueMatrix.SetDevice(CPUDEVICE);
 
     // BUGBUG: matrix type should be configured during validation
-    // TODO: Should we prepare the CSC data directly on the CPU and move it in one go?
     valueMatrix.SwitchToMatrixType(SPARSE, matrixFormatSparseCSC, false);
     valueMatrix.Reset();
 
