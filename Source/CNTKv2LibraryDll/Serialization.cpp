@@ -10,102 +10,269 @@
 #include <string>
 #include <vector>
 
+#pragma warning(push)
+#pragma warning(disable : 4800 4267 4610 4512 4100 4510)
+#include "CNTK.pb.h"
+#pragma warning(pop)
+
 namespace CNTK
 {
-    // This wrapper redefines operator<< in terms of unformatted (binary) write operation.
-    struct BinaryOStreamWrapper
+
+    proto::DictionaryValue* CreateProto(const DictionaryValue& src);
+    proto::Dictionary* CreateProto(const Dictionary& src);
+    proto::Vector* CreateProto(const std::vector<DictionaryValue>& src);
+    proto::NDArrayView* CreateProto(const NDArrayView& src);
+    proto::Axis* CreateProto(const Axis& src);
+    proto::NDShape* CreateProto(const NDShape& src);
+
+    DictionaryValue* CreateFromProto(const proto::DictionaryValue& src);
+    Dictionary* CreateFromProto(const proto::Dictionary& src);
+    std::vector<DictionaryValue>* CreateFromProto(const proto::Vector& src);
+    NDArrayView* CreateFromProto(const proto::NDArrayView& src);
+    Axis* CreateFromProto(const proto::Axis& src);
+    NDShape* CreateFromProto(const proto::NDShape& src);
+
+    // TODO: safe as bytes instead?
+    std::string ToString(const std::wstring& wstring)
     {
-        BinaryOStreamWrapper(std::ostream& s) : m_stream(s) {}
-
-        template<typename T>
-        typename std::enable_if<std::is_pod<T>::value, BinaryOStreamWrapper&>::type
-        operator<<(const T& value)
-        { 
-            m_stream.write(reinterpret_cast<const char*>(&value), sizeof(T)); 
-            return *this ; 
-        }
-
-        BinaryOStreamWrapper& operator<<(const std::wstring& str)
-        {
-            size_t length = str.length();
-            *this << length;
-            m_stream.write(reinterpret_cast<const char*>(str.c_str()), str.length() * sizeof(wchar_t)); 
-            return *this; 
-        }
-
-        operator std::ostream& () { return m_stream; }
-
-        std::ostream& m_stream;
-        BinaryOStreamWrapper(const BinaryOStreamWrapper&) = delete; BinaryOStreamWrapper(BinaryOStreamWrapper&&) = delete; BinaryOStreamWrapper& operator=(const BinaryOStreamWrapper&) = delete; BinaryOStreamWrapper& operator=(BinaryOStreamWrapper&&) = delete;
-    };
-
-    // This wrapper redefines operator>> in terms of unformatted (binary) read operation.
-    struct BinaryIStreamWrapper
-    {
-        BinaryIStreamWrapper(std::istream& s) : m_stream(s) {}
-
-        template<typename T>
-        typename std::enable_if<std::is_pod<T>::value, BinaryIStreamWrapper&>::type
-        operator>>(T& value)
-        { 
-            static_assert(sizeof(T) <= sizeof(size_t), "size_t is the largest supported type.");
-            m_stream.read(buf, sizeof(T)); 
-            value = *(reinterpret_cast<T*>(buf));
-            return *this ; 
-        }
-
-        BinaryIStreamWrapper& operator>>(std::wstring& str)
-        { 
-            size_t length;
-            *this >> length;
-            str.reserve(length);
-            for (size_t i = 0; i < length; ++i)
-            {
-                m_stream.read(buf, sizeof(wchar_t)); 
-                str.append(reinterpret_cast<wchar_t*>(buf));
-            }
-            return *this; 
-        }
-
-        operator std::istream& () const { return m_stream ;}
-
-        std::istream& m_stream;
-        char buf[sizeof(size_t)];
-        BinaryIStreamWrapper(const BinaryIStreamWrapper&) = delete; BinaryIStreamWrapper(BinaryIStreamWrapper&&) = delete; BinaryIStreamWrapper& operator=(const BinaryIStreamWrapper&) = delete; BinaryIStreamWrapper& operator=(BinaryIStreamWrapper&&) = delete;
-    };
-
-    BinaryOStreamWrapper& operator<<(BinaryOStreamWrapper& stream, const NDShape& us)
-    {
-        auto size = us.Rank();
-        stream << size;
-        for (auto i = 0; i < size; i++)
-        {
-            stream << us[i];
-        }
-        return stream;
+        return std::string(wstring.begin(), wstring.end());
     }
 
-    BinaryOStreamWrapper& operator<<(BinaryOStreamWrapper& stream, const Axis& us)
+    std::wstring ToWString(const std::string& string)
     {
-        stream << us.StaticAxisIndex(false);
-        stream << us.Name();
-        stream << us.IsOrdered();
+        return std::wstring(string.begin(), string.end());
+    }
 
-        return stream;
+    proto::NDArrayView::DataType ToProtoType(DataType type)
+    {
+        if (!proto::NDArrayView::DataType_IsValid((int)type))
+        {
+            InvalidArgument("NDArrayView::DataType is invalid.");
+        }
+        return proto::NDArrayView_DataType(type);
+        switch (type)
+        {
+        case DataType::Float:
+            return proto::NDArrayView::Float;
+        case DataType::Double:
+            return proto::NDArrayView::Double;
+        case DataType::Unknown:
+            return proto::NDArrayView::Unknown;
+        default:
+            NOT_IMPLEMENTED
+        }
+    }
+
+    DataType FromProtoType(proto::NDArrayView::DataType type)
+    {
+        switch (type)
+        {
+        case proto::NDArrayView::Float:
+            return DataType::Float;
+        case proto::NDArrayView::Double:
+            return DataType::Double;
+        case proto::NDArrayView::Unknown:
+            return DataType::Unknown;
+        default:
+            NOT_IMPLEMENTED
+        }
+    }
+
+    proto::NDArrayView::StorageFormat ToProtoType(StorageFormat type)
+    {
+        if (!proto::NDArrayView::StorageFormat_IsValid((int)type))
+        {
+            InvalidArgument("NDArrayView::StorageFormat is invalid.");
+        }
+        switch (type)
+        {
+        case StorageFormat::Dense:
+            return proto::NDArrayView::Dense;
+        case StorageFormat::SparseCSC:
+            return proto::NDArrayView::SparseCSC;
+        case StorageFormat::SparseBlockCol:
+            return proto::NDArrayView::SparseBlockCol;
+        default:
+            NOT_IMPLEMENTED
+        }
+    }
+
+    proto::DictionaryValue::Type ToProtoType(DictionaryValue::Type type)
+    {
+        if (!proto::DictionaryValue::Type_IsValid((int)type))
+        {
+            InvalidArgument("DictionaryValue::Type is invalid.");
+        }
+        switch (type)
+        {
+        case DictionaryValue::Type::None:
+            return proto::DictionaryValue::None;
+        case DictionaryValue::Type::Bool:
+            return proto::DictionaryValue::Bool;
+        case DictionaryValue::Type::Int:
+            return proto::DictionaryValue::Int;
+        case DictionaryValue::Type::SizeT:
+            return proto::DictionaryValue::SizeT;
+        case DictionaryValue::Type::Float:
+            return proto::DictionaryValue::Float;
+        case DictionaryValue::Type::Double:
+            return proto::DictionaryValue::Double;
+        case DictionaryValue::Type::NDShape:
+            return proto::DictionaryValue::NDShape;
+        case DictionaryValue::Type::Axis:
+            return proto::DictionaryValue::Axis;
+        case DictionaryValue::Type::Vector:
+            return proto::DictionaryValue::Vector;
+        case DictionaryValue::Type::Dictionary:
+            return proto::DictionaryValue::Dictionary;
+        case DictionaryValue::Type::NDArrayView:
+            return proto::DictionaryValue::NDArrayView;
+        default:
+            NOT_IMPLEMENTED
+        }
+    }
+    // TODO: use arenas for message allocations
+    proto::NDShape* CreateProto(const NDShape& src)
+    {
+        proto::NDShape* dst = new proto::NDShape();
+        auto size = src.Rank();
+        dst->mutable_shape_dim()->Reserve(size);
+        for (auto i = 0; i < size; i++)
+        {
+            dst->add_shape_dim(src[i]);
+        }
+        return dst;
+    }
+
+    NDShape* CreateFromProto(const proto::NDShape& src)
+    {
+        auto size = src.shape_dim_size();
+        NDShape* dst = new NDShape(size);
+        for (auto i = 0; i < size; i++)
+        {
+            dst[i] = src.shape_dim[i];
+        }
+        return dst;
+    }
+
+    proto::Axis* CreateProto(const Axis& src)
+    {
+        proto::Axis* dst = new proto::Axis();
+        dst->set_static_axis_idx(src.StaticAxisIndex(false));
+        dst->set_name(ToString(src.Name()));
+        dst->set_is_ordered_dynamic_axis(!src.IsStaticAxis() && src.IsOrdered());
+        return dst;
+    }
+
+    Axis* CreateFromProto(const proto::Axis& src)
+    {
+        if (Axis(src.static_axis_idx()).IsStaticAxis())
+        {
+             return new Axis(src.static_axis_idx());
+        }
+        else
+        {
+            return new Axis(ToWString(src.name()), src.is_ordered_dynamic_axis());
+        }
     }
 
     template <typename T>
-    void Write(BinaryOStreamWrapper& stream, const NDArrayView& view)
+    void CopyData(const NDArrayView& src, ::google::protobuf::RepeatedField<T>* dst)
     {
-        assert(view.Device().Type() == DeviceKind::CPU);
-
-        auto numElements = view.Shape().TotalSize();
-        const T* buffer = view.DataBuffer<T>();
-        for (auto i = 0; i < numElements; ++i)
+        auto size = src.Shape().TotalSize();
+        dst->Reserve(size);
+        T* buffer = src.DataBuffer<T>();
+        for (auto i = 0; i < size; ++i)
         {
-            stream << buffer[i];
+            dst->Add(buffer[i]);
         }
     }
+
+    proto::NDArrayView* CreatProto(const NDArrayView& src)
+    {
+        proto::NDArrayView* dst = new proto::NDArrayView();
+        dst->set_data_type(ToProtoType(src.GetDataType()));
+        dst->set_allocated_shape(CreateProto(us.Shape()));
+        dst->set_is_read_only(src.IsReadOnly());
+        dst->set_storage_format(ToProtoType(src.GetStorageFormat()));
+        if (src.GetDataType() == DataType::Float) 
+        {
+            CopyData<float>(src, dst->mutable_float_values()->mutable_value());
+        } 
+        else if (src.GetDataType() == DataType::Double) 
+        {
+            CopyData<double>(src, dst->mutable_double_values()->mutable_value());
+        }
+    }
+
+    NDArrayView* CreatFromProto(const proto::NDArrayView& src)
+    {
+         NDArrayView* viewPtr = new NDArrayView(dtype, shape, DeviceDescriptor::CPUDevice());
+        NDArrayView* dst = new NDArrayView();
+        dst->set_data_type(ToProtoType(src.GetDataType()));
+        dst->set_allocated_shape(CreateProto(us.Shape()));
+        dst->set_is_read_only(src.IsReadOnly());
+        dst->set_storage_format(ToProtoType(src.GetStorageFormat()));
+        if (src.GetDataType() == DataType::Float) 
+        {
+            CopyData<float>(src, dst->mutable_float_values()->mutable_value());
+        } 
+        else if (src.GetDataType() == DataType::Double) 
+        {
+            CopyData<double>(src, dst->mutable_double_values()->mutable_value());
+        }
+    }
+
+    void Copy(const std::vector<DictionaryValue>& src, proto::Vector& dst)
+    {
+        for (const auto& value : src)
+        {
+            Copy(value, *dst.add_value());
+        }
+    }
+
+    void Copy(const Dictionary& src, proto::Dictionary& dst)
+    {
+        for (const auto& kv : src)
+        {
+            Copy(kv.second, dst.mutable_data()->operator[ToString(kv.first)]);
+        }
+    }
+
+    void Copy(const DictionaryValue& src, proto::DictionaryValue& dst)
+    {
+        auto valueType = src.ValueType();
+        dst.set_value_type(ToProtoType(valueType));
+        switch (valueType)
+        {
+        case DictionaryValue::Type::None:
+            return;
+        case DictionaryValue::Type::Bool:
+            dst.set_bool_value(src.Value<bool>());
+        case DictionaryValue::Type::Int:
+            dst.set_int_value(src.Value<int>());
+        case DictionaryValue::Type::SizeT:
+            dst.set_size_t_value(src.Value<size_t>());
+        case DictionaryValue::Type::Float:
+            dst.set_float_value(src.Value<float>());
+        case DictionaryValue::Type::Double:
+            dst.set_double_value(src.Value<double>());
+        case DictionaryValue::Type::NDShape:
+            Copy(src.Value<NDShape>(), *dst.mutable_nd_shape_value());
+        case DictionaryValue::Type::Axis:
+            Copy(src.Value<Axis>(), *dst.mutable_axis_value());
+        case DictionaryValue::Type::Vector:
+            Copy(src.Value<std::vector<DictionaryValue>>(), *dst.mutable_vector_value());
+        case DictionaryValue::Type::Dictionary:
+            Copy(src.Value<Dictionary>(), *dst.mutable_dictionary_value());
+        case DictionaryValue::Type::NDArrayView:
+            Copy(src.Value<Dictionary>(), *dst.mutable_dictionary_value());
+        default:
+            NOT_IMPLEMENTED
+        }
+    }
+
+
 
     template <typename T>
     void Read(BinaryIStreamWrapper& stream, NDArrayView& view)
