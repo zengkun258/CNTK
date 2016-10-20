@@ -353,11 +353,9 @@ namespace CNTK
     {
         m_unit = dictionary[unitKey].Value<size_t>();
         Dictionary schedule = dictionary[scheduleKey].Value<Dictionary>();
-        vector<std::wstring> keys = schedule.Keys();
-        std::map<size_t, T> map;
-        for (const auto& key : keys)
+        for (const auto& kv : schedule)
         {
-            m_schedule[std::stoll(key)] = schedule[key].Value<T>();
+            m_schedule[std::stoll(kv.first)] = kv.second.Value<T>();
         }
     }
 

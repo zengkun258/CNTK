@@ -16,6 +16,9 @@
     <ClCompile Include="MinibatchSource.cpp" />
     <ClCompile Include="ComputeInputStatistics.cpp" />
     <ClCompile Include="Serialization.cpp" />
+    <ClCompile Include="proto\CNTK.pb.cc.VS_wrapper.cpp">
+      <Filter>proto</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h" />
@@ -33,6 +36,12 @@
     <ClInclude Include="API\CNTKLibraryExperimental.h">
       <Filter>API</Filter>
     </ClInclude>
+    <ClInclude Include="proto\CNTK.pb.h">
+      <Filter>proto</Filter>
+    </ClInclude>
+    <ClInclude Include="proto\CNTK.pb.cc">
+      <Filter>proto</Filter>
+    </ClInclude>
     <ClInclude Include="Serialization.h" />
     <ClInclude Include="Value.h" />
     <ClInclude Include="PrimitiveOpType.h" />
@@ -41,8 +50,14 @@
     <Filter Include="API">
       <UniqueIdentifier>{ea62180a-fb06-4f33-b472-243fab69be01}</UniqueIdentifier>
     </Filter>
+    <Filter Include="proto">
+      <UniqueIdentifier>{1a93e221-b14c-476a-a53d-c931030acd6e}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\bindings\python\cntk\PythonBindings.pyproj" />
+    <None Include="proto\CNTK.proto">
+      <Filter>proto</Filter>
+    </None>
   </ItemGroup>
 </Project>

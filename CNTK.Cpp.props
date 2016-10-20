@@ -91,6 +91,13 @@
     <OpenCvBinPath>$(OpenCvPath)\x64\vc12\bin</OpenCvBinPath>
   </PropertyGroup>
 
+  <PropertyGroup Condition="Exists('$(PROTOBUF_PATH)')">
+    <ProtobufInclude>$(PROTOBUF_PATH)\include;</ProtobufInclude>
+    <ProtobufLibPath>$(PROTOBUF_PATH)\lib;</ProtobufLibPath>
+    <ProtobufLib Condition="$(ReleaseBuild)">libprotobuf.lib</ProtobufLib>
+    <ProtobufLib Condition="$(DebugBuild)">libprotobufd.lib</ProtobufLib>
+  </PropertyGroup>
+  
   <PropertyGroup Condition="'$(CudaVersion)' == '8.0'">
     <CudaPath>$(CUDA_PATH_V8_0)</CudaPath>
     <CudaRuntimeDll>cudart64_80.dll</CudaRuntimeDll>

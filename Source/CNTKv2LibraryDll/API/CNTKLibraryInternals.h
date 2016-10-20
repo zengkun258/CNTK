@@ -156,6 +156,8 @@ namespace CNTK
     class Axis;
     enum class PrimitiveOpType : unsigned int;
 
+    class Serializer;
+
     // Similar to make_shared except that it associates a custom deleter with the shared_ptr to ensure
     // that objects are deleted on the same side of the library DLL where they are allocated
     template <typename T, typename ...CtorArgTypes>

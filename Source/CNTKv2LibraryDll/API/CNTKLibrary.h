@@ -1323,9 +1323,12 @@ namespace CNTK
         CNTK_API bool operator==(const DictionaryValue& other) const;
         CNTK_API bool operator!=(const DictionaryValue& other) const;
 
+        friend class Serializer;
+
         friend CNTK_API std::istream& operator>>(std::istream& stream, DictionaryValue& us);
         friend CNTK_API std::ostream& operator<<(std::ostream& stream, const DictionaryValue& us);
 
+        static const size_t Version = 1;
     private:
         template <typename T>
         static Type GetValueType()
@@ -1396,8 +1399,6 @@ namespace CNTK
             double m_double;
             void* m_ptr;
         } m_data;
-
-        const size_t version = 1;
     };
 
     ///
@@ -1437,28 +1438,24 @@ namespace CNTK
             return Contains(key.c_str());
         }
 
-        CNTK_API std::vector<std::wstring> Keys() const
-        {
-            std::vector<std::wstring> keys;
-            keys.reserve(m_dictionaryData->size());
-            for (const auto&it : *m_dictionaryData)
-            {
-                keys.push_back(it.first);
-            }
-            return keys;
-        }
-
         CNTK_API void Add(const Dictionary& other);
 
         CNTK_API bool operator==(const Dictionary& other) const;
         CNTK_API bool operator!=(const Dictionary& other) const;
 
+        typedef std::unordered_map<std::wstring, DictionaryValue>::const_iterator ConstDictionaryIterator;
+
+        ConstDictionaryIterator begin() const { return m_dictionaryData->begin(); }
+        ConstDictionaryIterator cbegin() const { return m_dictionaryData->cbegin(); }
+        ConstDictionaryIterator end() const { return m_dictionaryData->end(); }
+        ConstDictionaryIterator cend() const { return m_dictionaryData->cend(); }
+
         friend CNTK_API std::istream& operator>>(std::istream& stream, Dictionary& us);
         friend CNTK_API std::ostream& operator<<(std::ostream& stream, const Dictionary& us);
 
+        static const size_t Version = 1;
     private:
         std::shared_ptr<std::unordered_map<std::wstring, DictionaryValue>> m_dictionaryData;
-        const size_t version = 1;
     };
 
     ///
