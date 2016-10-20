@@ -6,6 +6,10 @@
 
 
 class TensorOpsMixin(object):
+    '''
+    This class defines math overloads so that CNTK nodes can be written in math
+    expressions.
+    '''
 
     # operator overload for (+) where self is the left operand
     def __add__(self, other):
@@ -76,7 +80,7 @@ class TensorOpsMixin(object):
     # TODO __xor__, __rxor__, __pow__, __rpow__,  __invert__
 
     # Comparison operators are not exposed yet, because of __eq__ being
-    # required to allow comparison of Variables on C++ so that we can say 
+    # required to allow comparison of Variables on C++ so that we can say
     # 'for var in variables'.
     # __lt__, __le__, __gt__, __ge__, __and__, __rand__, __or__, __ror__,
 
@@ -162,20 +166,23 @@ class EvalMixin(object):
 
     def eval(self, arguments=None, seq_starts=None, precision='float', device=None):
         '''
-        Evaluate the node using the specified `arguments` as input.
+        Evaluate the node using the specified ``arguments`` as input.
 
         Args:
-            arguments (`dict` or `list`): 
+            arguments (`dict` or `list`): one
+             of
+
               * map from input variables to the data
-              * list of inputs in the order that the function expects or 
-              Data should be either NumPy arrays or a `:class:cntk.io.MinibatchData` instance
-            seq_starts (`list` of `bool`s or `None`): if `None`, every sequence is
+              * list of inputs in the order that the function expects
+
+             Data should be either NumPy arrays or a :class:`cntk.io.MinibatchData` instance
+            seq_starts (`list` of `bool` or `None`): if `None`, every sequence is
              treated as a new sequence. Otherwise, it is interpreted as a list of
              Booleans that tell whether a sequence is a new sequence (`True`) or a
              continuation of the previous one (`False`)
             precision (`str` or `np.float32` or `np.float64`): precision, if string
              it can be one of 'float', 'float32', 'double', 'float64', or `None`
-            device (:class:`cntk.DeviceDescriptor`): the device descriptor that
+            device (:class:`cntk.device.DeviceDescriptor`): the device descriptor that
              contains the type and id of the device on which the computation is
              to be performed.
 
@@ -217,7 +224,7 @@ class ArrayMixin(object):
                 np_array = self.data().to_numpy()
             except AttributeError:
                 try:
-                    np_array = self.value().to_numpy()
+                    np_array = self.value
                 except AttributeError:
                     # Ideally an exception would be raised here, but getattr would swallow it
                     # so we return None
