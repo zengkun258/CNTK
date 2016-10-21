@@ -927,7 +927,6 @@ public:
         return !operator==(other);
     }
 
-
     // Scale along the axis (by default identity transform -> 1 scale).
     double scale = 1.0;
     // Translation along the axis (by default identity transform -> 0 translate).

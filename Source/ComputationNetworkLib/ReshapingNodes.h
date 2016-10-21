@@ -429,7 +429,9 @@ template class SliceNode<double>;
 // equivalent in spatial sense (for example input and target in case of pixelwise
 // semantic labeling) but they are separate leaf nodes which cannot be common
 // ancestors for inputs to crop node. However, they can be declared as equivalent
-// using equivalence nodes option.
+// using equivalence nodes option (when traversing from one crop input and other
+// once we reach two equivalence nodes we will consider that path between two
+// crop inputs is closed over them).
 //
 // Usage (Both NDL and BS):
 //  CropNode(input1, input2, offsetX, offsetY) or
