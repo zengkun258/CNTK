@@ -18,8 +18,11 @@
 #pragma warning(pop)
 
 #ifdef _MSC_VER
-#include <windows.h>
-#undef max
+#include <codecvt>
+#else
+#include <cstdlib>
+#include <clocale>
+#include <mutex>
 #endif
 
 namespace CNTK
@@ -48,29 +51,39 @@ namespace CNTK
         static void Copy(const DictionaryValue& src, proto::DictionaryValue& dst);
         static void Copy(const proto::DictionaryValue& src, DictionaryValue& dst);
 
+#ifndef _MSC_VER
+        static std::once_flag s_localeSet;
+        static void SetUTF8Locale()
+        {
+            std::call_once(s_localeSet, []{ std::setlocale(LC_ALL, "C.UTF-8"); });
+        }
+#endif
+
         static std::string ToString(const std::wstring& wstring)
         {
 #ifdef _MSC_VER
-        if( wstring.empty() ) return std::string();
-        int byteSize = WideCharToMultiByte(CP_UTF8, 0, wstring.data(), (int)wstring.size(), nullptr, 0, nullptr, nullptr);
-        std::string string(byteSize, 0);
-        WideCharToMultiByte(CP_UTF8, 0, wstring.data(), (int)wstring.size(), &string[0], byteSize, nullptr, nullptr);
-        return string;
+            std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> converter;
+            return converter.to_bytes(wstring);
 #else
-        return std::string(wstring.begin(), wstring.end());
+            SetUTF8Locale();
+            const auto length = wstring.length();
+            char buf[length * sizeof(std::wstring::value_type) + 1];
+            const auto res = std::wcstombs(buf, wstring.c_str(), sizeof(buf));
+            return (res >= 0) ? buf : "";
 #endif
         }
 
         static std::wstring ToWString(const std::string& string)
         {
 #ifdef _MSC_VER
-        if( string.empty() ) return std::wstring();
-        int byteSize = MultiByteToWideChar(CP_UTF8, 0, string.data(), (int)string.size(), nullptr, 0);
-        std::wstring wstring(byteSize, 0);
-        MultiByteToWideChar(CP_UTF8, 0, string.data(), (int)string.size(), &wstring[0], byteSize);
-        return wstring;
+            std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> converter;
+            return converter.from_bytes(string);
 #else
-        return std::wstring(string.begin(), string.end());
+            SetUTF8Locale();
+            const unsigned length = string.length();
+            wchar_t buf[length + 1];
+            const auto res = std::mbstowcs(buf, string.c_str(),  sizeof(buf));
+            return (res >= 0) ? buf : L"";
 #endif
         }
 
@@ -154,6 +167,10 @@ namespace CNTK
 
     };
 
+#ifndef _MSC_VER
+    /*static*/ std::once_flag Serializer::s_localeSet;
+#endif
+
     // TODO: use arenas for message allocations
     /*static*/ proto::NDShape* Serializer::CreateProto(const NDShape& src)
     {
@@ -198,8 +215,6 @@ namespace CNTK
             return new Axis(ToWString(src.name()), src.is_ordered_dynamic_axis());
         }
     }
-
-   
 
     /*static*/ proto::NDArrayView* Serializer::CreateProto(const NDArrayView& src)
     {
