@@ -530,6 +530,59 @@ CNTK2 = [
 
     }.ce
 
+
+	    CrossEntropyWithSampledSoftmaxT(
+        hiddenLayer                    /* Vector of dimension nHidden */,
+        labels                         /* One-hot for the true class (labels). Dimension: nClasses */,
+        randomSampleSelector           /* Sparse matrix of dimension nClasses * nSamples */,
+        weights                        /* nHidden * nClasses */,
+        bias                           /* Biases for logit computation. Dimension 1 * nClasses */,
+        logExpectedInSampleFrequeny    /* For each class logarithm of the estimated frequency the class is expected to occur in the set of random samples */,
+        removeAccidentalHits           /* If true then remove occurences of the sampled class from the random samples */
+        ) = 
+    {
+        # Getting the weights matrix wS in the subspace of samples. Dimension: nHidden * nSamples
+        wS = Times(weights, randomSampleSelector) // numHidden * numSamples
+        zS = TransposeTimes(hiddenLayer, wS) + TransposeTimes(bias - logExpectedInSampleFrequeny, randomSampleSelector) // [1 x numSamples]
+
+        # Getting the weight vector for the true label. Dimension nHidden
+        wT = Times(weights, labels) // [numHidden]
+        zT = TransposeTimes(hiddenLayer, wT) +  TransposeTimes(bias - logExpectedInSampleFrequeny, labels)  // [1]
+                                        
+        zSReduced = ReduceLogSum(zS)
+                                        
+        # The label (true class), might already be among the sampled classes.
+        # To get the 'partition function' over the union of label and sampled classes
+        # we need to LogPlus zt if the label is not among the sampled classes.
+        labelIsInSampled = ReduceSum(TransposeTimes(labels,randomSampleSelector))
+        logSum1 = if labelIsInSampled then 
+                    zSReduced 
+                    else 
+                    LogPlus(zT, zSReduced)
+        logSum = if removeAccidentalHits then logSum1 else LogPlus(zT, zSReduced)
+
+        ce = logSum - zT
+    }.ce
+
+    CrossEntropyWithSampledSoftmax2T(
+        hiddenLayer                    /* Vector of dimension nHidden */,
+        labels                         /* One-hot for the true class (labels). Dimension: nClasses */,
+        weights                        /* nClasses * nHidden */,
+        bias                           /* Biases for logit computation. Dimension nClasses */,
+        numSamples                     /* number of random samples to be used */,
+        samplingWeights                /* Sparse matrix of dimension nClasses * nSamples */,
+        sampleWithReplacement = true   /* boolean parameter specifiying if sampling with replacment should be used */,
+        removeAccidentalHits = true    /* If true then remove occurences of the sampled class from the random samples */
+        ) = 
+    {
+        samples        = CNTK2.GetRandomSample (samplingWeights, numSamples, sampleWithReplacement)
+        inclusionProbs = CNTK2.GetInclusionFrequency(samplingWeights, numSamples, sampleWithReplacement)
+        logPrior       = Log(inclusionProbs)
+        ce = CNTK2.CrossEntropyWithSampledSoftmaxT(hiddenLayer, labels,  samples, weights, bias, logPrior, removeAccidentalHits)
+
+    }.ce
+
+
     // 12. Comparison nodes
     Less(_, y, tag='')         = new ComputationNode [ operation = 'Less'         ; inputs = _AsNodes (_ : y) /*plus the function args*/ ]
     Equal(_, y, tag='')        = new ComputationNode [ operation = 'Equal'        ; inputs = _AsNodes (_ : y) /*plus the function args*/ ]

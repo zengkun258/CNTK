@@ -1263,7 +1263,9 @@ class RandomSampleNode : public RandomSampleNodeBase<ElemType>
 public:
     RandomSampleNode(DEVICEID_TYPE deviceId, const wstring& name, int sizeOfSampledSet = 0, bool allowDuplicates = false)
         : Base(deviceId, name, sizeOfSampledSet, allowDuplicates)
-    {}
+    {
+        MarkValueNonSharable();
+    }
 
     RandomSampleNode(const ScriptableObjects::IConfigRecordPtr configp)
         : RandomSampleNode(CPUDEVICE, L"<placeholder>", configp->Get(L"sizeOfSampledSet"), configp->Get(L"allowDuplicates"))
