@@ -1197,7 +1197,7 @@ class RandomSampleNodeBase : public ComputationNodeNonLooping<ElemType>, public 
     static const std::wstring TypeName(){return L"RandomSampleNodeBase";}
 
 public:
-    RandomSampleNodeBase(DEVICEID_TYPE deviceId, const wstring& name, int sizeOfSampledSet = 0, bool allowDuplicates = false)
+    RandomSampleNodeBase(DEVICEID_TYPE deviceId, const wstring& name, size_t sizeOfSampledSet = 0, bool allowDuplicates = false)
         : Base(deviceId, name), m_sizeOfSampledSet(sizeOfSampledSet), m_allowDuplicates(allowDuplicates)
     {
         SetRandomSeed((unsigned long)CreateUniqId());
@@ -1225,11 +1225,12 @@ protected:
 
 public:
     virtual void /*ComputationNode::*/ BackpropToNonLooping(size_t inputIndex) override {} // This node does not propagate gradients.
-    virtual void /*ComputationNodeBase::*/ Validate(bool isFinalValidationPass) override {}
-
+    virtual void /*ComputationNodeBase::*/ Validate(bool isFinalValidationPass) override;
     virtual bool OutputUsedInComputingInputNodesGradients() const override { return false; }
     virtual bool InputUsedInComputingInputNodesGradients(size_t /*childIndex*/) const override { return false;}
     virtual void /*ComputationNode::*/ ForwardPropNonLooping() override{}
+    virtual bool GetAllowDuplicates() const { return m_allowDuplicates; }
+    virtual size_t GetNumSamples() const { return m_sizeOfSampledSet; }
 
 protected:
     bool m_allowDuplicates; // The node can create samples allowing for duplicates (sampling with replacement) or not (sampling without replacement).
@@ -1260,7 +1261,7 @@ class RandomSampleNode : public RandomSampleNodeBase<ElemType>
     static const std::wstring TypeName(){ return L"RandomSample"; }
 
 public:
-    RandomSampleNode(DEVICEID_TYPE deviceId, const wstring& name, int sizeOfSampledSet = 0, bool allowDuplicates = false)
+    RandomSampleNode(DEVICEID_TYPE deviceId, const wstring& name, size_t sizeOfSampledSet = 0, bool allowDuplicates = false)
         : Base(deviceId, name, sizeOfSampledSet, allowDuplicates)
     {}
 
@@ -1294,7 +1295,7 @@ class RandomSampleInclusionFrequencyNode : public RandomSampleNodeBase<ElemType>
     typedef RandomSampleNodeBase<ElemType> Base; UsingComputationNodeMembersBoilerplate;
     static const std::wstring TypeName(){ return L"RandomSampleInclusionFrequency"; }
 public:
-    RandomSampleInclusionFrequencyNode(DEVICEID_TYPE deviceId, const wstring& name, int sizeOfSampledSet = 0, bool allowDuplicates = false)
+    RandomSampleInclusionFrequencyNode(DEVICEID_TYPE deviceId, const wstring& name, size_t sizeOfSampledSet = 0, bool allowDuplicates = false)
         : Base(deviceId, name, sizeOfSampledSet, allowDuplicates)
     {}
 
@@ -2559,7 +2560,6 @@ public:
                 runInvStdDev.AssignElementPowerOf(runInvStdDev, 2);
                 runInvStdDev.ElementInverse();
                 runInvStdDev += (float) m_epsilon;
-                runInvStdDev.Print();
                 m_convertRunningVariancePending = false;
             }
 
