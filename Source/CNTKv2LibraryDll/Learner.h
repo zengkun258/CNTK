@@ -41,8 +41,6 @@ namespace CNTK
 
         AdditionalLearningOptions m_additionalOptions;
 
-
-
         std::unordered_map<Parameter, NDArrayViewPtr> m_smoothedGradientValues;
 
         // The following four static protected methods expose private methods of NDArrayView class
