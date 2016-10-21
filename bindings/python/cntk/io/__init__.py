@@ -308,6 +308,13 @@ class ImageDeserializer(Deserializer):
             node = node.name()
         self.input[node] = dict(labelDim=num_classes)
 
+    # TODO: ignore labels on C++ level if labeldim is not specified
+    def ignore_labels(self):
+        '''
+        Ignore labels from the image deserializer
+        '''
+        self.input["_ignore_labels_"] = dict(labelDim=1000)
+
     @staticmethod
     def crop(crop_type='center', ratio=1.0, jitter_type='uniRatio'):
         '''
@@ -338,7 +345,7 @@ class ImageDeserializer(Deserializer):
                 jitterType=jitter_type)
 
     @staticmethod
-    def scale(width, height, channels, interpolations='linear'):
+    def scale(width, height, channels, interpolations='linear', scaleMode="fill", padValue=-1):
         '''
         Scale transform that can be used to pass to `map_features` for data augmentation.
 
@@ -348,12 +355,18 @@ class ImageDeserializer(Deserializer):
             channels (`int`): channels of the image
             interpolations (`str`, default 'linear'): possible values are
              'nearest', 'linear', 'cubic', and 'lanczos'
+            scaleMode (`str`, default 'center'): 'fill', 'crop' or 'pad'. 
+             'fill' - warp the image to the given target size.
+             'crop' - resize the image's shorter side to the given target size and crops the overlap.
+             'pad'  - resize the image's larger side to the given target size, center it and pad the rest
+            padValue (`int`, default -1): -1 or int value. The pad value used for the 'pad' mode.
+             If set to -1 then the border will be replicated.
 
         Returns:
             `dict` describing the scale transform
         '''
         return dict(type='Scale', width=width, height=height, channels=channels,
-                interpolations=interpolations)
+                interpolations=interpolations, scaleMode=scaleMode, padValue=padValue)
 
     @staticmethod
     def mean(filename):
@@ -371,11 +384,52 @@ class ImageDeserializer(Deserializer):
 
     # TODO color transpose
 
-#
-# CNTKTextFormatReader
-# TODO get away from cntk_py.text_format_minibatch_source and set it up
-# similarly to ImageDeserializer
-#
+
+class TextFormatDeserializer(Deserializer):
+    '''
+    This class configures the text reader that reads text from a file with lines of the form
+
+         [Sequence_Id](Sample)+ 
+
+        where
+
+         Sample=|Input_Name (Value )* 
+
+    Args:
+        filename (`str`): file name containing the text input
+
+    See also:
+        https://github.com/Microsoft/CNTK/wiki/CNTKTextFormat-Reader
+    '''
+
+    def __init__(self, filename):
+        super(TextFormatDeserializer, self).__init__('CNTKTextFormatDeserializer')
+        self['file'] = filename
+        self['input'] = self.input = {}
+
+    def map_input(self, node, dim, format="dense", alias=None):
+        '''
+        Maps node (either node instance or node name) to a part of the text input, 
+        either specified by the node name or the alias in the text file.
+        Example: for node name 'Apples' an input line could look like this:
+        |Apples 0 1 2 3 4 5 6 7 8 9
+
+        Args:
+            node (`str` or input node): node or its name
+            dim (`int`): specifies the dimension of the input value vector 
+             (for dense input this directly corresponds to the number of values in each sample, 
+             for sparse this represents the upper bound on the range of possible index values).
+            format (`str`, default 'dense'): 'dense' or 'sparse'. Specifies the input type. 
+            alias (`str`, default None): None or alias name. Optional abbreviated name that 
+             is used in the text file to avoid repeating long input names. For details please
+             see https://github.com/Microsoft/CNTK/wiki/CNTKTextFormat-Reader
+
+        '''
+        if not isinstance(node, str):
+            node = node.name()
+        if alias is None:
+            alias=node
+        self.input[node] = dict(dim=dim, format=format, alias=alias)
 
 
 @typemap
