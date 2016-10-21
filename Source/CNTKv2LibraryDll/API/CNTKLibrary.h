@@ -3393,6 +3393,11 @@ namespace CNTK
     {
         size_t m_globalRank;
         std::wstring m_hostId;
+
+        bool IsMain() const
+        {
+            return m_globalRank == 0;
+        }
     };
 
      inline bool operator==(const DistributedWorkerDescriptor& left, const DistributedWorkerDescriptor& right)
