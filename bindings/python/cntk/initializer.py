@@ -19,7 +19,7 @@ def uniform(scale=DefaultParamInitScale, seed=None):
         seed (`int`): random seed
 
     Returns:
-        initializer for `:class:cntk.variables.Parameter`
+        initializer for :class:`cntk.variables.Parameter`
     '''
     if seed is None:
         seed = DefaultRandomSeed()
@@ -37,7 +37,7 @@ def gaussian(output_rank=DefaultParamInitOutputRank, filter_rank=DefaultParamIni
         seed (`int`): random seed
 
     Returns:
-        initializer for `:class:cntk.variables.Parameter`
+        initializer for :class:`cntk.variables.Parameter`
     '''
     if seed is None:
         seed = DefaultRandomSeed()
@@ -55,7 +55,7 @@ def xavier(output_rank=DefaultParamInitOutputRank, filter_rank=DefaultParamInitF
         seed (`int`): random seed
 
     Returns:
-        initializer for `:class:cntk.variables.Parameter`
+        initializer for :class:`cntk.variables.Parameter`
     '''
     if seed is None:
         seed = DefaultRandomSeed()
@@ -73,7 +73,7 @@ def glorot_uniform(output_rank=DefaultParamInitOutputRank, filter_rank=DefaultPa
         seed (`int`): random seed
 
     Returns:
-        initializer for `:class:cntk.variables.Parameter`
+        initializer for :class:`cntk.variables.Parameter`
     '''
     if seed is None:
         seed = DefaultRandomSeed()
@@ -91,7 +91,7 @@ def glorot_normal(output_rank=DefaultParamInitOutputRank, filter_rank=DefaultPar
         seed (`int`): random seed
 
     Returns:
-        initializer for `:class:cntk.variables.Parameter`
+        initializer for :class:`cntk.variables.Parameter`
     '''
     if seed is None:
         seed = DefaultRandomSeed()
@@ -109,7 +109,7 @@ def he_uniform(output_rank=DefaultParamInitOutputRank, filter_rank=DefaultParamI
         seed (`int`): random seed
 
     Returns:
-        initializer for `:class:cntk.variables.Parameter`
+        initializer for :class:`cntk.variables.Parameter`
     '''
     if seed is None:
         seed = DefaultRandomSeed()
@@ -127,7 +127,7 @@ def he_normal(output_rank=DefaultParamInitOutputRank, filter_rank=DefaultParamIn
         seed (`int`): random seed
 
     Returns:
-        initializer for `:class:cntk.variables.Parameter`
+        initializer for :class:`cntk.variables.Parameter`
     '''
     if seed is None:
         seed = DefaultRandomSeed()
@@ -143,6 +143,6 @@ def bilinear(kernel_width, kernel_height):
         kernel_height (`int`): kernel height
 
     Returns:
-        initializer for `:class:cntk.variables.Parameter`
+        initializer for :class:`cntk.variables.Parameter`
     '''
     return cntk_py.bilinear_initializer(kernel_width, kernel_height)
