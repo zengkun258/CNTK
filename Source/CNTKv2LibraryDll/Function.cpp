@@ -1243,6 +1243,7 @@ namespace CNTK
         do
         {
             recurrentNodeOutputModified = false;
+            functionVisitCounts.clear();
             RootFunction()->ValidateOrUpdateOutputs(functionVisitCounts, recurrentNodeOutputModified);
             numValidationPasses++;
         } while (recurrentNodeOutputModified && (numValidationPasses < maxNumValidationPassesAllowed));
