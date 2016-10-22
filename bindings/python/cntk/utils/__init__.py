@@ -7,7 +7,7 @@ import sys
 import numbers
 import collections
 import numpy as np
-import scipy.sparse
+from scipy import sparse
 from .. import cntk_py
 from cntk.device import cpu, gpu, use_default_device
 from .swig_helper import typemap
@@ -19,7 +19,7 @@ def sanitize_precision(precision):
     Converts precision to NumPy precision
 
     Args:
-        precision (`str` or `np.float32` or `np.float64`): precision, if string
+        precision (``str`` or `np.float32` or `np.float64`): precision, if string
          it can be one of 'float' 'float32, 'double', or 'float64'
 
     Returns:
@@ -68,7 +68,7 @@ def sparse_to_str(data):
 def tensors_to_text_format(sample_idx, alias_tensor_map):
     '''
     Converts a list of NumPy arrays representing tensors of inputs into a
-    format that is readable by `CNTKTextReader`.
+    format that is readable by ``CNTKTextReader``.
 
     Args:
         sample_idx (int): number of current sample
@@ -400,21 +400,29 @@ def sanitize_batch(var, batch, seq_starts=None, data_type=None, device=None):
 
             batch = pad_to_dense(batch)
 
-    # If it still is not an NumPy array, try brute force...
-    if not isinstance(batch, np.ndarray):
-        if data_type is None:
-            data_type = get_data_type(var)
-        batch = np.asarray(batch, dtype=data_type)
+    if sparse.issparse(batch):
+        if not sparse.isspmatrix_csr(batch):
+            batch = batch.tocsr()
 
-    # Maybe a NumPy dtype was given, but with lower accuracy than float32, then
-    # convert it to float32
-    if np.issubdtype(batch.dtype, int):
-        batch = batch.astype(np.float32)
+        ndav = cntk_py.NDArrayView(tuple(reversed(batch.shape)), batch.data,
+                batch.indptr, batch.indices, device, False)
 
-        if len(cntk_shape) == 0:
-            raise ValueError('values should be an array of input samples')
+    else:
+        # If it still is not an NumPy array, try brute force...
+        if not isinstance(batch, np.ndarray):
+            if data_type is None:
+                data_type = get_data_type(var)
+            batch = np.asarray(batch, dtype=data_type)
 
-    ndav = create_NDArrayView_from_NumPy(batch, device)
+        # Maybe a NumPy dtype was given, but with lower accuracy than float32, then
+        # convert it to float32
+        if np.issubdtype(batch.dtype, int):
+            batch = batch.astype(np.float32)
+
+            if len(cntk_shape) == 0:
+                raise ValueError('values should be an array of input samples')
+
+        ndav = create_NDArrayView_from_NumPy(batch, device)
 
     if use_mask:
         value = Value(ndav, mask)
@@ -476,7 +484,7 @@ def sanitize_var_map(op_arguments, arguments, precision=None,
                      device=None):
     '''
     Sanitizes a dictionary of `Variable`s to input data such that it can be
-    handed off to the :meth:`cntk.ops.functions.Function.forward` method.
+    handed off to the :func:`cntk.ops.functions.Function.forward` method.
 
     Args:
         op_arguments (:class:`cntk.ops.functions.Function`): arguments of the root function. In

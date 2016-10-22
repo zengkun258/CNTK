@@ -1098,6 +1098,64 @@ def dynamic_axes(self):
         return view;
     }
 
+    NDArrayView(const CNTK::NDShape& shape, PyObject* pyData, PyObject* pyColStarts, PyObject* pyRowIndices, const CNTK::DeviceDescriptor& device, bool readOnly) 
+    {
+        //
+        // pyData, pyColStarts, and pyRowIndices are fed by
+        // scipy.sparse.csr_matrix's data, indptr, and indices
+        //
+
+        if (!PyArray_Check((PyArrayObject*)pyData))
+        {
+            throw std::logic_error("sparse data must be a NumPy array");
+        }
+
+        if (!PyArray_Check((PyArrayObject*)pyColStarts))
+        {
+            throw std::logic_error("indices must be a NumPy array");
+        }
+
+        if (!PyArray_Check((PyArrayObject*)pyRowIndices))
+        {
+            throw std::logic_error("index pointers must be a NumPy array");
+        }
+
+        PyArrayObject* data = (PyArrayObject*)pyData;
+        PyArrayObject* indices = (PyArrayObject*)pyColStarts;
+        PyArrayObject* indptr = (PyArrayObject*)pyRowIndices;
+
+        int typecode = PyArray_TYPE(data);
+        size_t numNonZeroValues = PyArray_SIZE(data);
+        
+        NDArrayView* view;
+        if (typecode == NPY_FLOAT)
+        {
+            NDArrayView  tmp(shape, 
+             (CNTK::SparseIndexType*)PyArray_DATA(indices), 
+             (CNTK::SparseIndexType*)PyArray_DATA(indptr), 
+             (float*)PyArray_DATA(data), numNonZeroValues, 
+             DeviceDescriptor::CPUDevice(), readOnly);
+            view = new NDArrayView(DataType::Float, StorageFormat::SparseCSC, tmp.Shape(), device);
+            view->CopyFrom(tmp);
+        }
+        else if (typecode == NPY_DOUBLE)
+        {
+            NDArrayView  tmp(shape, 
+             (CNTK::SparseIndexType*)PyArray_DATA(indices), 
+             (CNTK::SparseIndexType*)PyArray_DATA(indptr), 
+             (double*)PyArray_DATA(data), numNonZeroValues, 
+             DeviceDescriptor::CPUDevice(), readOnly);
+            view = new NDArrayView(DataType::Double, StorageFormat::SparseCSC, tmp.Shape(), device);
+            view->CopyFrom(tmp);
+        }
+        else
+        {
+            throw std::logic_error("NumPy array of type float32 or float64 expected");
+        }
+
+        return view;
+    }
+
     PyObject* to_numpy() {
         if ((*self).GetStorageFormat() != StorageFormat::Dense)
             throw std::invalid_argument("only dense supported at the moment");

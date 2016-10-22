@@ -7,10 +7,12 @@
 import math
 import numpy as np
 from .. import Function
+from ..ops import times
 from ..trainer import *
 from ..learner import *
 from .. import cross_entropy_with_softmax, classification_error, parameter, \
         input_variable, times, plus, reduce_sum
+import pytest
 
 def test_trainer(tmpdir):
     in1 = input_variable(shape=(1,))
@@ -61,4 +63,18 @@ def test_output_to_retain():
 
     assert np.allclose(var_map[z_output], np.asarray(in1_value)+20)
 
+from scipy.sparse import coo_matrix, csr_matrix, csc_matrix, lil_matrix, \
+        dok_matrix
+
+SPARSE_TYPES = [coo_matrix, csr_matrix, csc_matrix, lil_matrix, dok_matrix]
+
+@pytest.mark.parametrize("sparse_type", SPARSE_TYPES)
+def test_eval_sparse(sparse_type):
+    dim = 10
+    in1 = input_variable(shape=(dim,), is_sparse=True)
+    z = times(1, in1 * 2)
+    value = np.eye(dim)
+    expected = value * 2
+    sparse_val = [sparse_type(value)]
+    assert np.allclose(z.eval({in1: sparse_val}), expected)
 
